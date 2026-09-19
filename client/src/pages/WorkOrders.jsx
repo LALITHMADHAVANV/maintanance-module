@@ -1,19 +1,50 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useWorkOrders } from '../hooks/useWorkOrders';
 import { useSpecialists } from '../hooks/useSpecialists';
+import { useAuth } from '../context/AuthContext';
 import { mockMachines, mockUsers, PROBLEM_TYPES } from '../services/mockData';
 import {
   ClipboardList, Plus, Search, Filter, X, Play, CheckCircle2, XCircle,
-  Clock, Timer, DollarSign, AlertTriangle, Camera, Send
+  Clock, Timer, DollarSign, AlertTriangle, Camera, Send, UserCheck
 } from 'lucide-react';
 
 export default function WorkOrders() {
+  const { user } = useAuth();
+  const isTechnician = user?.role === 'technician';
+
   const {
     workOrders, search, setSearch, filterStatus, setFilterStatus,
     filterPriority, setFilterPriority, addWorkOrder, updateStatus,
-    updateWorkOrder, deleteWorkOrder, stats
+    updateWorkOrder, deleteWorkOrder, stats: globalStats
   } = useWorkOrders();
   const { findSpecialists, problemTypes } = useSpecialists();
+
+  // Filter for technician assigned orders if technician
+  const displayedOrders = useMemo(() => {
+    if (!isTechnician) return workOrders;
+    return workOrders.filter(wo =>
+      wo.assigned_technician === user?.id ||
+      wo.technician_name === user?.name ||
+      (user?.id === 'usr_006' && !wo.assigned_technician)
+    );
+  }, [workOrders, isTechnician, user]);
+
+  const stats = useMemo(() => {
+    if (!isTechnician) return globalStats;
+    const completed = displayedOrders.filter(wo => wo.status === 'completed');
+    const totalCost = completed.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+    const avgFixingTime = completed.length > 0
+      ? Math.round(completed.reduce((s, wo) => s + (wo.fixing_time_minutes || 0), 0) / completed.length)
+      : 0;
+
+    return {
+      pending: displayedOrders.filter(wo => wo.status === 'pending').length,
+      inProgress: displayedOrders.filter(wo => wo.status === 'in_progress').length,
+      completed: completed.length,
+      avgFixingTime,
+      totalCost
+    };
+  }, [isTechnician, globalStats, displayedOrders]);
 
   const [showModal, setShowModal] = useState(false);
   const [selectedWO, setSelectedWO] = useState(null);
@@ -132,15 +163,45 @@ export default function WorkOrders() {
     <div style={{ animation: 'fadeInUp 0.4s ease' }}>
       <div className="page-header">
         <div>
-          <h1>Work Orders</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <h1>{isTechnician ? 'My Assigned Work Orders' : 'Work Orders'}</h1>
+            {isTechnician && (
+              <span className="badge badge-warning" style={{ fontSize: 11, fontWeight: 700 }}>
+                Technician Queue
+              </span>
+            )}
+          </div>
           <p className="page-subtitle">
-            {stats.pending} pending • {stats.inProgress} in progress • {stats.completed} completed
+            {isTechnician
+              ? `Showing only tasks assigned to you (${user?.name}) • ${stats.pending} pending • ${stats.inProgress} in progress • ${stats.completed} completed`
+              : `${stats.pending} pending • ${stats.inProgress} in progress • ${stats.completed} completed`
+            }
           </p>
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> Create Work Order
-        </button>
+        {!isTechnician && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> Create Work Order
+          </button>
+        )}
       </div>
+
+      {isTechnician && (
+        <div style={{
+          background: 'rgba(59, 130, 246, 0.1)',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '12px 16px',
+          marginBottom: 'var(--space-6)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <UserCheck size={20} className="text-primary-400" />
+          <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+            <strong>Specialist View:</strong> You are viewing only the maintenance tasks assigned specifically to you. Click the green check mark to log repair details and capture the mandatory completion photo.
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="stats-grid work-orders-stats" style={{ marginBottom: 'var(--space-6)' }}>
@@ -148,21 +209,21 @@ export default function WorkOrders() {
           <div className="stat-icon amber"><Clock size={20} /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.pending}</div>
-            <div className="stat-label">Pending</div>
+            <div className="stat-label">{isTechnician ? 'My Pending' : 'Pending'}</div>
           </div>
         </div>
         <div className="stat-card blue">
           <div className="stat-icon blue"><Play size={20} /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.inProgress}</div>
-            <div className="stat-label">In Progress</div>
+            <div className="stat-label">{isTechnician ? 'My In Progress' : 'In Progress'}</div>
           </div>
         </div>
         <div className="stat-card emerald">
           <div className="stat-icon emerald"><CheckCircle2 size={20} /></div>
           <div className="stat-info">
             <div className="stat-value">{stats.completed}</div>
-            <div className="stat-label">Completed</div>
+            <div className="stat-label">{isTechnician ? 'My Completed' : 'Completed'}</div>
           </div>
         </div>
         <div className="stat-card purple">
@@ -176,7 +237,7 @@ export default function WorkOrders() {
           <div className="stat-icon red"><DollarSign size={20} /></div>
           <div className="stat-info">
             <div className="stat-value">₹{stats.totalCost.toLocaleString()}</div>
-            <div className="stat-label">Total Cost</div>
+            <div className="stat-label">{isTechnician ? 'My Repair Cost' : 'Total Cost'}</div>
           </div>
         </div>
       </div>
@@ -221,7 +282,7 @@ export default function WorkOrders() {
             </tr>
           </thead>
           <tbody>
-            {workOrders.map(wo => (
+            {displayedOrders.map(wo => (
               <tr key={wo.id}>
                 <td style={{ fontWeight: 600, color: 'var(--primary-400)', cursor: 'pointer' }} onClick={() => openDetail(wo)}>{wo.id.toUpperCase()}</td>
                 <td>{wo.machine_name}</td>
@@ -251,11 +312,11 @@ export default function WorkOrders() {
         </table>
       </div>
 
-      {workOrders.length === 0 && (
+      {displayedOrders.length === 0 && (
         <div className="empty-state">
           <ClipboardList size={48} />
-          <h3>No work orders found</h3>
-          <p>Adjust filters or create a new work order</p>
+          <h3>No assigned work orders found</h3>
+          <p>{isTechnician ? 'You have no assigned tasks matching current filters.' : 'Adjust filters or create a new work order'}</p>
         </div>
       )}
 

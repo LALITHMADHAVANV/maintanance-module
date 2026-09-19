@@ -11,7 +11,8 @@ import { useAuth } from '../context/AuthContext';
 
 export default function TabletEntry() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('issue'); // 'issue', 'inspection', 'status', 'repair', 'parts', 'new_machine'
+  const isTechnician = user?.role === 'technician';
+  const [activeTab, setActiveTab] = useState(user?.role === 'technician' ? 'repair' : 'issue'); // 'issue', 'inspection', 'status', 'repair', 'parts', 'new_machine'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shift, setShift] = useState('Shift 1 (06:00 - 14:00)');
   const [selectedFloor, setSelectedFloor] = useState('All Floors');
@@ -377,7 +378,16 @@ export default function TabletEntry() {
   // -------------------------------------------------------------
   // 4. WORK ORDER REPAIR LOGGING STATE
   // -------------------------------------------------------------
-  const [selectedWoId, setSelectedWoId] = useState(workOrders[0]?.id || 'wo_001');
+  const technicianWorkOrders = useMemo(() => {
+    if (!isTechnician) return workOrders;
+    return workOrders.filter(wo =>
+      wo.assigned_technician === user?.id ||
+      wo.technician_name === user?.name ||
+      (user?.id === 'usr_006' && !wo.assigned_technician)
+    );
+  }, [workOrders, isTechnician, user]);
+
+  const [selectedWoId, setSelectedWoId] = useState(technicianWorkOrders[0]?.id || workOrders[0]?.id || 'wo_001');
   const [repairForm, setRepairForm] = useState({
     fixing_time_minutes: 45,
     waiting_time_minutes: 15,
@@ -387,7 +397,7 @@ export default function TabletEntry() {
     completion_photo_url: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=500' // Default sample completion photo
   });
 
-  const activeWorkOrder = workOrders.find(wo => wo.id === selectedWoId) || workOrders[0];
+  const activeWorkOrder = technicianWorkOrders.find(wo => wo.id === selectedWoId) || technicianWorkOrders[0] || workOrders[0];
 
   const handleRepairSubmit = (e) => {
     e?.preventDefault();
@@ -1333,18 +1343,31 @@ export default function TabletEntry() {
               <form onSubmit={handleRepairSubmit} className="tab-form">
                 {/* SELECT WORK ORDER */}
                 <div className="form-group">
-                  <label className="tab-label">1. Select Active Work Order</label>
-                  <select
-                    className="tab-input tab-select"
-                    value={selectedWoId}
-                    onChange={(e) => setSelectedWoId(e.target.value)}
-                  >
-                    {workOrders.map(wo => (
-                      <option key={wo.id} value={wo.id}>
-                        {wo.id} — {wo.machine_name} [{wo.issue_reported?.slice(0, 35)}...] ({wo.status.toUpperCase()})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="tab-label">1. Select Assigned Work Order to Repair</label>
+                    {isTechnician && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 font-medium">
+                        Showing your assigned tasks ({technicianWorkOrders.length})
+                      </span>
+                    )}
+                  </div>
+                  {technicianWorkOrders.length === 0 ? (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-800 text-sm">
+                      No open work orders currently assigned to you ({user?.name || 'Technician'}). Check back when new tasks are dispatched!
+                    </div>
+                  ) : (
+                    <select
+                      className="tab-input tab-select"
+                      value={selectedWoId}
+                      onChange={(e) => setSelectedWoId(e.target.value)}
+                    >
+                      {technicianWorkOrders.map(wo => (
+                        <option key={wo.id} value={wo.id}>
+                          {wo.id} — {wo.machine_name} [{wo.issue_reported?.slice(0, 35)}...] ({wo.status.toUpperCase()})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 {activeWorkOrder && (

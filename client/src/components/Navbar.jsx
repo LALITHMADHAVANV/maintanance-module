@@ -10,14 +10,14 @@ import {
   Sun, Moon
 } from 'lucide-react';
 
-const NAV_ITEMS = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/tablet-entry', icon: Tablet, label: 'Tablet Data Entry', badge: 'Shop Floor' },
-  { path: '/machines', icon: Settings2, label: 'Machines' },
-  { path: '/work-orders', icon: ClipboardList, label: 'Work Orders' },
-  { path: '/messages', icon: MessageSquare, label: 'Messages' },
-  { path: '/spare-parts', icon: Package, label: 'Spare Parts' },
-  { path: '/analytics', icon: BarChart3, label: 'Analytics' },
+const ALL_NAV_ITEMS = [
+  { path: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  { path: '/tablet-entry', icon: Tablet, label: 'Tablet Data Entry', badge: 'Shop Floor', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  { path: '/machines', icon: Settings2, label: 'Machines', roles: ['admin', 'manager', 'supervisor'] },
+  { path: '/work-orders', icon: ClipboardList, label: 'Work Orders', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  { path: '/spare-parts', icon: Package, label: 'Spare Parts & Restore', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  { path: '/messages', icon: MessageSquare, label: 'Messages', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  { path: '/analytics', icon: BarChart3, label: 'Analytics', roles: ['admin', 'manager', 'supervisor'] },
 ];
 
 export default function Navbar({ collapsed: propCollapsed, setCollapsed: propSetCollapsed }) {
@@ -28,6 +28,24 @@ export default function Navbar({ collapsed: propCollapsed, setCollapsed: propSet
   const navigate = useNavigate();
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const isTechnician = user?.role === 'technician';
+
+  const visibleNavItems = ALL_NAV_ITEMS.filter(item => {
+    if (!item.roles) return true;
+    return item.roles.includes(user?.role || 'technician');
+  }).map(item => {
+    if (isTechnician && item.path === '/') {
+      return { ...item, label: 'My Assigned Work' };
+    }
+    if (isTechnician && item.path === '/work-orders') {
+      return { ...item, label: 'My Work Orders' };
+    }
+    if (isTechnician && item.path === '/tablet-entry') {
+      return { ...item, label: 'Repair & Photo Log', badge: 'Technician' };
+    }
+    return item;
+  });
 
   const collapsed = propCollapsed !== undefined ? propCollapsed : internalCollapsed;
   const setCollapsed = propSetCollapsed !== undefined ? propSetCollapsed : setInternalCollapsed;
@@ -80,7 +98,7 @@ export default function Navbar({ collapsed: propCollapsed, setCollapsed: propSet
           {!collapsed && (
             <div className="brand-text">
               <h2>TextileCare</h2>
-              <span>Pro Maintenance</span>
+              <span>{isTechnician ? 'Technician Portal' : 'Pro Maintenance'}</span>
             </div>
           )}
           <button className="collapse-btn hide-mobile" onClick={() => setCollapsed(!collapsed)}>
@@ -93,7 +111,7 @@ export default function Navbar({ collapsed: propCollapsed, setCollapsed: propSet
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(item => (
+          {visibleNavItems.map(item => (
             <NavLink
               key={item.path}
               to={item.path}
