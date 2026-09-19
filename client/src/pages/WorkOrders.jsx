@@ -274,13 +274,15 @@ export default function WorkOrders() {
             <div className="stat-label">Avg Fix Time</div>
           </div>
         </div>
-        <div className="stat-card red">
-          <div className="stat-icon red"><DollarSign size={20} /></div>
-          <div className="stat-info">
-            <div className="stat-value">₹{stats.totalCost.toLocaleString()}</div>
-            <div className="stat-label">{isTechnician ? 'My Repair Cost' : 'Total Cost'}</div>
+        {!isTechnician && (
+          <div className="stat-card red">
+            <div className="stat-icon red"><DollarSign size={20} /></div>
+            <div className="stat-info">
+              <div className="stat-value">₹{stats.totalCost.toLocaleString()}</div>
+              <div className="stat-label">Total Cost</div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -593,7 +595,7 @@ export default function WorkOrders() {
                 <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', margin: '4px 0 0' }}>{completeModalWO.issue_reported}</p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isTechnician ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <div className="input-group">
                   <label>Fixing Time (Minutes)</label>
                   <input
@@ -603,15 +605,17 @@ export default function WorkOrders() {
                     onChange={e => setCompleteForm(prev => ({ ...prev, fixing_time_minutes: e.target.value }))}
                   />
                 </div>
-                <div className="input-group">
-                  <label>Repair / Parts Cost (₹)</label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={completeForm.cost}
-                    onChange={e => setCompleteForm(prev => ({ ...prev, cost: e.target.value }))}
-                  />
-                </div>
+                {!isTechnician && (
+                  <div className="input-group">
+                    <label>Repair / Parts Cost (₹)</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={completeForm.cost}
+                      onChange={e => setCompleteForm(prev => ({ ...prev, cost: e.target.value }))}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="input-group">
