@@ -47,11 +47,12 @@ export const PERMISSION_MATRIX = {
     export:      ['admin', 'manager'],
   },
   spareparts: {
-    view:   ['admin', 'manager', 'supervisor', 'technician'],
-    create: ['admin'],
-    edit:   ['admin'],
-    use:    ['admin', 'supervisor', 'technician'],
-    delete: ['admin'],
+    view:    ['admin', 'manager', 'supervisor', 'technician'],
+    create:  ['admin'],
+    edit:    ['admin'],
+    use:     ['admin', 'supervisor', 'technician'],
+    restock: ['admin', 'supervisor'],
+    delete:  ['admin'],
   },
   users: {
     view:   ['admin', 'manager'],

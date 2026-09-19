@@ -128,10 +128,31 @@ CREATE TABLE spare_parts (
   unit_cost DECIMAL(10,2),
   supplier VARCHAR(255),
   last_ordered DATE,
+  last_restocked_date TIMESTAMPTZ,
+  last_restocked_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  restock_count INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_spare_parts_name ON spare_parts(part_name);
+
+-- 8.1 RESTOCK_HISTORY
+CREATE TABLE restock_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  part_id UUID NOT NULL REFERENCES spare_parts(id) ON DELETE CASCADE,
+  quantity_received INT NOT NULL,
+  quantity_before INT NOT NULL,
+  quantity_after INT NOT NULL,
+  received_from VARCHAR(255),
+  received_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  received_date TIMESTAMPTZ DEFAULT NOW(),
+  notes TEXT,
+  photo_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_restock_history_part ON restock_history(part_id);
+CREATE INDEX idx_restock_history_date ON restock_history(received_date DESC);
 
 -- 9. MAINTENANCE_EXPENSES
 CREATE TABLE maintenance_expenses (

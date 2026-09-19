@@ -78,11 +78,12 @@ export const specialistsAPI = {
   updateSkills: (id, data) => api.put(`/specialists/${id}/skills`, data),
 };
 
-// ---------- Spare Parts ----------
 export const sparePartsAPI = {
   getAll: (params) => api.get('/spareparts', { params }),
   create: (data) => api.post('/spareparts', data),
   update: (id, data) => api.put(`/spareparts/${id}`, data),
+  restock: (id, data) => api.post(`/spareparts/${id}/restock`, data),
+  getRestockHistory: (id) => api.get(`/spareparts/${id}/restock-history`),
   getLowStock: () => api.get('/spareparts/low-stock'),
 };
 

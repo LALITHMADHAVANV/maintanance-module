@@ -86,6 +86,79 @@ router.patch('/:id/use', authenticateToken, checkPermission('spareparts', 'use')
   }
 });
 
+// POST /api/spareparts/:id/restock — Admin & Supervisor can restock
+router.post('/:id/restock', authenticateToken, checkPermission('spareparts', 'restock'), async (req, res) => {
+  try {
+    const { quantity_received, received_from, notes, photo_url } = req.body;
+    if (!quantity_received || quantity_received < 1) {
+      return res.status(400).json({ error: 'quantity_received must be at least 1.' });
+    }
+
+    // Fetch current stock
+    const { data: part, error: fetchErr } = await supabase.from('spare_parts').select('*').eq('id', req.params.id).single();
+    if (fetchErr || !part) return res.status(404).json({ error: 'Spare part not found.' });
+
+    const quantity_before = part.quantity;
+    const quantity_after = quantity_before + quantity_received;
+
+    // Update spare_parts
+    const { data: updatedPart, error: updateErr } = await supabase
+      .from('spare_parts')
+      .update({ 
+        quantity: quantity_after,
+        last_restocked_date: new Date().toISOString(),
+        last_restocked_by: req.user.userId,
+        restock_count: part.restock_count + 1
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (updateErr) throw updateErr;
+
+    // Insert restock_history
+    await supabase.from('restock_history').insert({
+      part_id: req.params.id,
+      quantity_received,
+      quantity_before,
+      quantity_after,
+      received_from: received_from || null,
+      received_by: req.user.userId,
+      notes: notes || null,
+      photo_url: photo_url || null,
+    });
+
+    res.json({ success: true, part: updatedPart, message: 'Parts restocked successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to restock spare part.' });
+  }
+});
+
+// GET /api/spareparts/:id/restock-history — All roles can view
+router.get('/:id/restock-history', authenticateToken, checkPermission('spareparts', 'view'), async (req, res) => {
+  try {
+    // We join with the users table to get the name of the person who received it
+    const { data, error } = await supabase
+      .from('restock_history')
+      .select('*, users!received_by(name, role)')
+      .eq('part_id', req.params.id)
+      .order('received_date', { ascending: false });
+    
+    if (error) throw error;
+    
+    // Map data to match frontend requirements
+    const history = (data || []).map(record => ({
+      ...record,
+      received_by_name: record.users?.name || 'Unknown User'
+    }));
+
+    res.json(history);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch restock history.' });
+  }
+});
+
 // DELETE /api/spareparts/:id — Admin only
 router.delete('/:id', authenticateToken, checkPermission('spareparts', 'delete'), async (req, res) => {
   try {

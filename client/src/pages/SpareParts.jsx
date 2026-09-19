@@ -1,20 +1,37 @@
 import { useState } from 'react';
-import { mockSpareParts, mockMachines } from '../services/mockData';
+import { useSpareParts } from '../hooks/useSpareParts';
+import { mockMachines } from '../services/mockData';
 import { useAuth } from '../context/AuthContext';
+import { usePermission } from '../hooks/usePermission';
+import RestockModal from '../components/RestockModal';
+import RestockHistoryModal from '../components/RestockHistoryModal';
+import { formatDistanceToNow } from 'date-fns';
 import {
-  Package, Plus, Search, AlertTriangle, Edit3, X, TrendingDown, Check,
-  Wrench, CheckCircle2, RotateCcw
+  Package, Plus, Search, AlertTriangle, Edit3, X, TrendingDown,
+  Wrench, CheckCircle2, TrendingUp, History
 } from 'lucide-react';
 
 export default function SpareParts() {
   const { user } = useAuth();
+  const { can } = usePermission();
   const isTechnician = user?.role === 'technician';
+  const canRestock = can('spareparts', 'restock');
 
-  const [parts, setParts] = useState(mockSpareParts);
+  const { parts, loading, addPart, updatePart, restockPart, getRestockHistory, usePart } = useSpareParts();
+
   const [search, setSearch] = useState('');
   const [filterStock, setFilterStock] = useState('all');
+  
+  // Modals
   const [showModal, setShowModal] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
+  
+  const [restockModalPart, setRestockModalPart] = useState(null);
+  
+  const [historyModalPart, setHistoryModalPart] = useState(null);
+  const [historyData, setHistoryData] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     part_name: '', quantity: '', reorder_level: '', unit_cost: '', supplier: ''
   });
@@ -56,6 +73,24 @@ export default function SpareParts() {
     setRestoreMachineId(mockMachines[0]?.id || 'mch_001');
   };
 
+  const openRestockModal = (part) => {
+    setRestockModalPart(part);
+  };
+  
+  const openHistoryModal = async (part) => {
+    setHistoryModalPart(part);
+    setHistoryLoading(true);
+    const data = await getRestockHistory(part.id);
+    setHistoryData(data);
+    setHistoryLoading(false);
+  };
+
+  const handleRestockSubmit = async (data) => {
+    await restockPart(restockModalPart.id, data);
+    showToast(`✅ Successfully restocked ${data.quantity_received} units of ${restockModalPart.part_name}!`);
+    setRestockModalPart(null);
+  };
+
   const handleRestoreSubmit = (e) => {
     e.preventDefault();
     if (!restoreModalPart) return;
@@ -67,22 +102,28 @@ export default function SpareParts() {
 
     const targetMachine = mockMachines.find(m => m.id === restoreMachineId);
 
-    setParts(prev => prev.map(p =>
-      p.id === restoreModalPart.id
-        ? { ...p, quantity: p.quantity - restoreQty }
-        : p
-    ));
+    // Call hook to use part (mock deduction)
+    usePart(restoreModalPart.id, restoreQty);
 
     showToast(`✅ Successfully issued ${restoreQty}x ${restoreModalPart.part_name} to restore ${targetMachine?.name || 'Machine'}!`);
     setRestoreModalPart(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    const dataToSave = { 
+      ...formData, 
+      quantity: Number(formData.quantity), 
+      reorder_level: Number(formData.reorder_level), 
+      unit_cost: Number(formData.unit_cost) 
+    };
+
     if (editingPart) {
-      setParts(prev => prev.map(p => p.id === editingPart.id ? { ...p, ...formData, quantity: Number(formData.quantity), reorder_level: Number(formData.reorder_level), unit_cost: Number(formData.unit_cost) } : p));
+      await updatePart(editingPart.id, dataToSave);
+      showToast('Part updated successfully.');
     } else {
-      setParts(prev => [{ id: `sp_${Date.now()}`, ...formData, quantity: Number(formData.quantity), reorder_level: Number(formData.reorder_level), unit_cost: Number(formData.unit_cost), last_ordered: new Date().toISOString().split('T')[0] }, ...prev]);
+      await addPart(dataToSave);
+      showToast('Part added successfully.');
     }
     setShowModal(false);
   };
@@ -90,6 +131,14 @@ export default function SpareParts() {
   const onChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const totalValue = parts.reduce((sum, p) => sum + p.quantity * p.unit_cost, 0);
+
+  if (loading && parts.length === 0) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '100px 0' }}>
+        <div className="spinner"></div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ animation: 'fadeInUp 0.4s ease' }}>
@@ -180,11 +229,19 @@ export default function SpareParts() {
           <h3 style={{ fontSize: 'var(--font-base)', fontWeight: 700, color: 'var(--red-400)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-3)' }}>
             <AlertTriangle size={18} /> Low Stock Alerts
           </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
             {lowStockParts.map(p => (
-              <span key={p.id} className="badge badge-danger" style={{ fontSize: 'var(--font-xs)' }}>
-                {p.part_name}: {p.quantity}/{p.reorder_level}
-              </span>
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-panel)', padding: '10px 14px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.2)' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{p.part_name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Stock: <strong style={{ color: 'var(--red-500)' }}>{p.quantity}</strong> / {p.reorder_level}</div>
+                </div>
+                {canRestock && (
+                  <button className="btn btn-primary btn-sm" onClick={() => openRestockModal(p)} style={{ fontSize: 12, padding: '4px 10px', height: 28 }}>
+                    Quick Restock
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -210,10 +267,8 @@ export default function SpareParts() {
             <tr>
               <th>Part Name</th>
               <th>Quantity Available</th>
-              <th>Reorder Level</th>
-              <th>Unit Cost</th>
-              <th>Supplier</th>
               <th>Status</th>
+              {!isTechnician && <th>Last Restocked</th>}
               <th>Actions</th>
             </tr>
           </thead>
@@ -222,26 +277,69 @@ export default function SpareParts() {
               const isLow = part.quantity <= part.reorder_level;
               return (
                 <tr key={part.id}>
-                  <td style={{ fontWeight: 600 }}>{part.part_name}</td>
-                  <td style={{ color: isLow ? 'var(--red-400)' : 'var(--text-primary)', fontWeight: 700, fontSize: 'var(--font-md)' }}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{part.part_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      Reorder level: {part.reorder_level} • Supplier: {part.supplier}
+                    </div>
+                  </td>
+                  <td style={{ color: isLow ? 'var(--red-500)' : 'var(--text-primary)', fontWeight: 700, fontSize: 'var(--font-lg)' }}>
                     {part.quantity}
                   </td>
-                  <td>{part.reorder_level}</td>
-                  <td>₹{part.unit_cost.toLocaleString()}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{part.supplier}</td>
-                  <td><span className={`badge ${isLow ? 'badge-danger' : 'badge-success'}`}>{isLow ? 'Low Stock' : 'In Stock'}</span></td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {isLow ? (
+                       <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><TrendingDown size={12}/> Low Stock</span>
+                    ) : (
+                       <span className="badge badge-success"><CheckCircle2 size={12}/> In Stock</span>
+                    )}
+                  </td>
+                  {!isTechnician && (
+                    <td>
+                      {part.last_restocked_date ? (
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>
+                            {formatDistanceToNow(new Date(part.last_restocked_date), { addSuffix: true })}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {part.restock_count} total restocks
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Never restocked</span>
+                      )}
+                    </td>
+                  )}
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <button
                         className="btn btn-primary btn-sm"
                         onClick={() => openRestoreModal(part)}
                         title="Use part to restore machine"
                         style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
                       >
-                        <Wrench size={13} /> Use / Restore
+                        <Wrench size={13} /> {isTechnician ? 'Use' : 'Issue'}
                       </button>
+                      
+                      {canRestock && (
+                        <button 
+                          className="btn btn-success btn-sm" 
+                          onClick={() => openRestockModal(part)} 
+                          title="Restock Parts"
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
+                        >
+                          <TrendingUp size={13} /> Restock
+                        </button>
+                      )}
+
                       {!isTechnician && (
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(part)} title="Edit Part"><Edit3 size={14} /></button>
+                        <>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openHistoryModal(part)} title="Restock History">
+                            <History size={16} className="text-muted" />
+                          </button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openEdit(part)} title="Edit Part Settings">
+                            <Edit3 size={16} className="text-muted" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -251,6 +349,24 @@ export default function SpareParts() {
           </tbody>
         </table>
       </div>
+
+      {/* Restock & History Modals */}
+      {restockModalPart && (
+        <RestockModal 
+          part={restockModalPart} 
+          onClose={() => setRestockModalPart(null)} 
+          onConfirm={handleRestockSubmit} 
+        />
+      )}
+      
+      {historyModalPart && (
+        <RestockHistoryModal 
+          part={historyModalPart}
+          history={historyData}
+          loading={historyLoading}
+          onClose={() => setHistoryModalPart(null)}
+        />
+      )}
 
       {/* Technician Restore / Issue Modal */}
       {restoreModalPart && (
