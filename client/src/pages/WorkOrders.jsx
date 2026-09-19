@@ -2,15 +2,20 @@ import { useState, useCallback, useMemo } from 'react';
 import { useWorkOrders } from '../hooks/useWorkOrders';
 import { useSpecialists } from '../hooks/useSpecialists';
 import { useAuth } from '../context/AuthContext';
+import { usePermission } from '../hooks/usePermission';
 import { mockMachines, mockUsers, PROBLEM_TYPES } from '../services/mockData';
 import {
   ClipboardList, Plus, Search, Filter, X, Play, CheckCircle2, XCircle,
-  Clock, Timer, DollarSign, AlertTriangle, Camera, Send, UserCheck
+  Clock, Timer, DollarSign, AlertTriangle, Camera, Send, UserCheck, ShieldOff, Eye
 } from 'lucide-react';
 
 export default function WorkOrders() {
   const { user } = useAuth();
-  const isTechnician = user?.role === 'technician';
+  const { can, role, isTechnician, isSupervisor, isManager, isAdmin, canManageWorkOrders } = usePermission();
+
+  const canCreate = can('workorders', 'create');
+  const canDelete = can('workorders', 'delete');
+  const isReadOnly = isManager; // Managers view all but cannot create/edit/delete
 
   const {
     workOrders, search, setSearch, filterStatus, setFilterStatus,
@@ -19,15 +24,26 @@ export default function WorkOrders() {
   } = useWorkOrders();
   const { findSpecialists, problemTypes } = useSpecialists();
 
-  // Filter for technician assigned orders if technician
+  // Role-based order scoping
   const displayedOrders = useMemo(() => {
-    if (!isTechnician) return workOrders;
-    return workOrders.filter(wo =>
-      wo.assigned_technician === user?.id ||
-      wo.technician_name === user?.name ||
-      (user?.id === 'usr_006' && !wo.assigned_technician)
-    );
-  }, [workOrders, isTechnician, user]);
+    if (isAdmin || isManager) return workOrders; // see all
+    if (isTechnician) {
+      return workOrders.filter(wo =>
+        wo.assigned_technician === user?.id ||
+        wo.technician_name === user?.name ||
+        (user?.id === 'usr_006' && !wo.assigned_technician)
+      );
+    }
+    if (isSupervisor) {
+      // Supervisor sees orders they created or orders for their team
+      return workOrders.filter(wo =>
+        wo.reported_by === user?.id ||
+        wo.supervisor_id === user?.id ||
+        wo.created_by === user?.id
+      );
+    }
+    return workOrders;
+  }, [workOrders, isAdmin, isManager, isTechnician, isSupervisor, user]);
 
   const stats = useMemo(() => {
     if (!isTechnician) return globalStats;
@@ -164,12 +180,15 @@ export default function WorkOrders() {
       <div className="page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <h1>{isTechnician ? 'My Assigned Work Orders' : 'Work Orders'}</h1>
-            {isTechnician && (
-              <span className="badge badge-warning" style={{ fontSize: 11, fontWeight: 700 }}>
-                Technician Queue
-              </span>
-            )}
+            <h1>
+              {isTechnician ? 'My Assigned Work Orders'
+                : isSupervisor ? 'My Team\'s Work Orders'
+                : isManager ? 'All Work Orders (Read-Only)'
+                : 'Work Orders'}
+            </h1>
+            {isTechnician && <span className="badge badge-warning" style={{ fontSize: 11, fontWeight: 700 }}>Technician Queue</span>}
+            {isSupervisor && <span className="badge badge-success" style={{ fontSize: 11, fontWeight: 700 }}>My Team</span>}
+            {isManager && <span className="badge" style={{ fontSize: 11, fontWeight: 700, background: 'rgba(168,85,247,0.15)', color: 'var(--purple-600)' }}>Read-Only</span>}
           </div>
           <p className="page-subtitle">
             {isTechnician
@@ -178,27 +197,47 @@ export default function WorkOrders() {
             }
           </p>
         </div>
-        {!isTechnician && (
+        {canCreate && (
           <button className="btn btn-primary" onClick={openCreate}>
             <Plus size={16} /> Create Work Order
           </button>
         )}
       </div>
 
+      {/* Role context banners */}
       {isTechnician && (
         <div style={{
-          background: 'rgba(59, 130, 246, 0.1)',
-          border: '1px solid rgba(59, 130, 246, 0.3)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '12px 16px',
-          marginBottom: 'var(--space-6)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12
+          background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)',
+          borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 'var(--space-6)',
+          display: 'flex', alignItems: 'center', gap: 12
         }}>
-          <UserCheck size={20} className="text-primary-400" />
-          <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-            <strong>Specialist View:</strong> You are viewing only the maintenance tasks assigned specifically to you. Click the green check mark to log repair details and capture the mandatory completion photo.
+          <UserCheck size={20} />
+          <div style={{ fontSize: 13 }}>
+            <strong>Technician View:</strong> Showing only tasks assigned to you. Complete tasks by clicking the check mark and providing a mandatory completion photo.
+          </div>
+        </div>
+      )}
+      {isSupervisor && (
+        <div style={{
+          background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)',
+          borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 'var(--space-6)',
+          display: 'flex', alignItems: 'center', gap: 12
+        }}>
+          <UserCheck size={20} style={{ color: 'var(--emerald-500)' }} />
+          <div style={{ fontSize: 13 }}>
+            <strong>Supervisor View:</strong> Showing work orders from your team. You can create, assign, and update status on your team’s work orders.
+          </div>
+        </div>
+      )}
+      {isManager && (
+        <div style={{
+          background: 'rgba(168,85,247,0.07)', border: '1px solid rgba(168,85,247,0.2)',
+          borderRadius: 'var(--radius-lg)', padding: '12px 16px', marginBottom: 'var(--space-6)',
+          display: 'flex', alignItems: 'center', gap: 12
+        }}>
+          <Eye size={20} style={{ color: 'var(--purple-500)' }} />
+          <div style={{ fontSize: 13 }}>
+            <strong>Manager View:</strong> You have full visibility of all work orders across the department. This is a read-only view — only admins and supervisors can create or modify work orders.
           </div>
         </div>
       )}

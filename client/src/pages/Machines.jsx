@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMachines } from '../hooks/useMachines';
+import { usePermission } from '../hooks/usePermission';
 import { MACHINE_TYPES, LOCATIONS, BRANDS } from '../services/mockData';
 import {
-  Settings2, Plus, Search, Filter, Edit3, Trash2, X, MapPin, Calendar, Tag
+  Settings2, Plus, Search, Filter, Edit3, Trash2, X, MapPin, Calendar, Tag, ShieldOff
 } from 'lucide-react';
 
 export default function Machines() {
   const navigate = useNavigate();
+  const { can, isAdmin, isManager, isTechnician, role } = usePermission();
   const {
     machines, search, setSearch, filterType, setFilterType,
     filterStatus, setFilterStatus, addMachine, updateMachine, deleteMachine, stats
   } = useMachines();
+
+  const canCreate = can('machines', 'create');
+  const canEdit   = can('machines', 'edit');
+  const canDelete = can('machines', 'delete');
   const [showModal, setShowModal] = useState(false);
   const [editingMachine, setEditingMachine] = useState(null);
   const [formData, setFormData] = useState({
@@ -53,14 +59,33 @@ export default function Machines() {
 
   return (
     <div style={{ animation: 'fadeInUp 0.4s ease' }}>
+      {/* Role Banner */}
+      {!isAdmin && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+          marginBottom: 16, borderRadius: 'var(--radius-md)',
+          background: isManager ? 'rgba(168,85,247,0.06)' : 'rgba(16,185,129,0.06)',
+          border: `1px solid ${isManager ? 'rgba(168,85,247,0.2)' : 'rgba(16,185,129,0.2)'}`,
+        }}>
+          <ShieldOff size={16} style={{ color: isManager ? 'var(--purple-500)' : 'var(--emerald-500)', flexShrink: 0 }} />
+          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
+            <strong style={{ textTransform: 'capitalize' }}>{role} view</strong> —
+            {isTechnician ? ' Showing machines linked to your assigned work orders.' : ' Viewing all machines.'}
+            {!canCreate && ' Machine creation and editing is restricted to Admins.'}
+          </span>
+        </div>
+      )}
+
       <div className="page-header">
         <div>
           <h1>Machines</h1>
           <p className="page-subtitle">{stats.total} machines • {stats.active} active • {stats.maintenance} in maintenance</p>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>
-          <Plus size={16} /> Add Machine
-        </button>
+        {canCreate && (
+          <button className="btn btn-primary" onClick={openAdd}>
+            <Plus size={16} /> Add Machine
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -125,8 +150,28 @@ export default function Machines() {
                 <td><span className={`badge ${statusColors[machine.status]}`}>{machine.status}</span></td>
                 <td>
                   <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(machine)}><Edit3 size={14} /></button>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-400)' }} onClick={() => handleDelete(machine.id)}><Trash2 size={14} /></button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => navigate(`/machines/${machine.id}`)}
+                      title="View details"
+                    >
+                      View
+                    </button>
+                    {canEdit && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => openEdit(machine)} title="Edit machine">
+                        <Edit3 size={14} />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: 'var(--red-400)' }}
+                        onClick={() => handleDelete(machine.id)}
+                        title="Delete machine"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

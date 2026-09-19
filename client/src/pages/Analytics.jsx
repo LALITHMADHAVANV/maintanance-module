@@ -5,7 +5,9 @@ import {
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import { getDowntimeData, getCostData, getPerformanceData, getBrandComparisonData, mockWorkOrders, mockMachines, mockExpenses } from '../services/mockData';
-import { BarChart3, Clock, DollarSign, TrendingUp, Download, Filter } from 'lucide-react';
+import { BarChart3, Clock, DollarSign, TrendingUp, Download, Filter, ShieldOff } from 'lucide-react';
+import { usePermission } from '../hooks/usePermission';
+import { useAuth } from '../context/AuthContext';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -30,6 +32,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function Analytics() {
   const [activeTab, setActiveTab] = useState('downtime');
   const [period, setPeriod] = useState('month');
+  const { can, role, isSupervisor, isAdmin, isManager } = usePermission();
+  const { user } = useAuth();
+  const canExport = can('analytics', 'export');
 
   const downtimeData = useMemo(() => getDowntimeData(), []);
   const costData = useMemo(() => getCostData(), []);
@@ -65,7 +70,9 @@ export default function Analytics() {
       <div className="page-header">
         <div>
           <h1>Analytics</h1>
-          <p className="page-subtitle">Machine performance, costs, and maintenance insights</p>
+          <p className="page-subtitle">
+            {isSupervisor ? 'Your team\'s machine performance, costs, and maintenance insights' : 'Machine performance, costs, and maintenance insights'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select className="select-field" style={{ width: 130 }} value={period} onChange={e => setPeriod(e.target.value)}>
@@ -74,9 +81,23 @@ export default function Analytics() {
             <option value="quarter">This Quarter</option>
             <option value="year">This Year</option>
           </select>
-          <button className="btn btn-ghost"><Download size={16} /> Export</button>
+          {canExport && <button className="btn btn-ghost"><Download size={16} /> Export</button>}
         </div>
       </div>
+
+      {/* Role scope banner */}
+      {isSupervisor && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+          marginBottom: 16, borderRadius: 'var(--radius-md)',
+          background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)',
+        }}>
+          <ShieldOff size={16} style={{ color: 'var(--emerald-500)', flexShrink: 0 }} />
+          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
+            <strong>Supervisor view</strong> — Analytics are scoped to your team’s machines and work orders. Export is available to Admins and Managers only.
+          </span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: 'var(--space-6)' }}>

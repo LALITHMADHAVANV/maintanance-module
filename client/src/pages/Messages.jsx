@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useMessaging } from '../context/MessagingContext';
 import { useAuth } from '../context/AuthContext';
+import { usePermission } from '../hooks/usePermission';
 import { mockUsers } from '../services/mockData';
 import { formatDistanceToNow } from 'date-fns';
 import {
   MessageSquare, Send, Search, Filter, Inbox, SendHorizonal, Trash2, X,
-  Image, Camera, Check, CheckCheck, AlertTriangle, Clock, User
+  Image, Camera, Check, CheckCheck, AlertTriangle, Clock, User, ShieldOff, Eye
 } from 'lucide-react';
 
 export default function Messages() {
   const { user } = useAuth();
+  const { can, role, isManager, isTechnician, isSupervisor, allowedMessageTargets } = usePermission();
   const { messages, sendMessage, markAsRead, deleteMessage, getInbox, getSent, unreadCount } = useMessaging();
   const [activeTab, setActiveTab] = useState('inbox');
   const [filterType, setFilterType] = useState('all');
@@ -19,6 +21,14 @@ export default function Messages() {
   const [composeForm, setComposeForm] = useState({
     receiver_id: '', content: '', message_type: 'chat', photo: null
   });
+
+  const canSend = can('messages', 'send');
+
+  // Filter recipient list based on allowed target roles for this user's role
+  const allowedTargetRoles = allowedMessageTargets();
+  const availableRecipients = mockUsers.filter(u =>
+    u.id !== user?.id && allowedTargetRoles.includes(u.role)
+  );
 
   const inbox = getInbox();
   const sent = getSent();
@@ -70,10 +80,31 @@ export default function Messages() {
           <h1>Messages</h1>
           <p className="page-subtitle">{unreadCount} unread messages</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCompose(true)}>
-          <Send size={16} /> Compose
-        </button>
+        {canSend && (
+          <button className="btn btn-primary" onClick={() => setShowCompose(true)}>
+            <Send size={16} /> Compose
+          </button>
+        )}
       </div>
+
+      {/* Role context banner */}
+      {(isManager || isTechnician || isSupervisor) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+          marginBottom: 16, borderRadius: 'var(--radius-md)',
+          background: isManager ? 'rgba(168,85,247,0.06)' : 'rgba(59,130,246,0.06)',
+          border: `1px solid ${isManager ? 'rgba(168,85,247,0.2)' : 'rgba(59,130,246,0.2)'}`,
+        }}>
+          {isManager ? <Eye size={16} style={{ color: 'var(--purple-500)', flexShrink: 0 }} /> : <ShieldOff size={16} style={{ flexShrink: 0 }} />}
+          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
+            <strong style={{ textTransform: 'capitalize' }}>{role} view</strong> —
+            {isManager
+              ? ' Managers can view messages but cannot compose new messages.'
+              : ` You can message: ${allowedTargetRoles.join(', ')} only.`
+            }
+          </span>
+        </div>
+      )}
 
       {/* Tabs & Filters */}
       <div className="filter-bar">
@@ -191,12 +222,18 @@ export default function Messages() {
             </div>
             <div className="input-group">
               <label>To</label>
-              <select className="select-field" value={composeForm.receiver_id} onChange={e => setComposeForm(prev => ({ ...prev, receiver_id: e.target.value }))}>
-                <option value="">Select recipient...</option>
-                {mockUsers.filter(u => u.id !== user?.id).map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                ))}
-              </select>
+              {availableRecipients.length === 0 ? (
+                <div style={{ padding: 12, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-sm)', color: 'var(--red-600)' }}>
+                  No available recipients for your role.
+                </div>
+              ) : (
+                <select className="select-field" value={composeForm.receiver_id} onChange={e => setComposeForm(prev => ({ ...prev, receiver_id: e.target.value }))}>
+                  <option value="">Select recipient...</option>
+                  {availableRecipients.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="input-group">
               <label>Type</label>

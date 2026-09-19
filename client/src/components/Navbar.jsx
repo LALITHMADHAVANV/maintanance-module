@@ -11,13 +11,45 @@ import {
 } from 'lucide-react';
 
 const ALL_NAV_ITEMS = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'supervisor', 'technician'] },
-  { path: '/tablet-entry', icon: Tablet, label: 'Tablet Data Entry', badge: 'Shop Floor', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  {
+    path: '/',
+    icon: LayoutDashboard,
+    label: 'Dashboard',
+    roles: ['admin', 'manager', 'supervisor', 'technician'],
+    roleLabels: { technician: 'My Assigned Work', supervisor: 'Team Dashboard', manager: 'Department Overview' }
+  },
+  {
+    path: '/tablet-entry',
+    icon: Tablet,
+    label: 'Tablet Data Entry',
+    badge: 'Shop Floor',
+    roles: ['admin', 'supervisor', 'technician'],
+    roleLabels: { technician: 'Repair & Photo Log', supervisor: 'Tablet Entry' },
+    roleBadges: { technician: 'Technician' }
+  },
   { path: '/machines', icon: Settings2, label: 'Machines', roles: ['admin', 'manager', 'supervisor'] },
-  { path: '/work-orders', icon: ClipboardList, label: 'Work Orders', roles: ['admin', 'manager', 'supervisor', 'technician'] },
-  { path: '/spare-parts', icon: Package, label: 'Spare Parts & Restore', roles: ['admin', 'manager', 'supervisor', 'technician'] },
+  {
+    path: '/work-orders',
+    icon: ClipboardList,
+    label: 'Work Orders',
+    roles: ['admin', 'manager', 'supervisor', 'technician'],
+    roleLabels: { technician: 'My Work Orders', manager: 'Work Orders (View)', supervisor: 'Team Work Orders' }
+  },
+  {
+    path: '/spare-parts',
+    icon: Package,
+    label: 'Spare Parts',
+    roles: ['admin', 'manager', 'supervisor', 'technician'],
+    roleLabels: { technician: 'Spare Parts & Restore', supervisor: 'Spare Parts & Restore' }
+  },
   { path: '/messages', icon: MessageSquare, label: 'Messages', roles: ['admin', 'manager', 'supervisor', 'technician'] },
-  { path: '/analytics', icon: BarChart3, label: 'Analytics', roles: ['admin', 'manager', 'supervisor'] },
+  {
+    path: '/analytics',
+    icon: BarChart3,
+    label: 'Analytics',
+    roles: ['admin', 'manager', 'supervisor'],
+    roleLabels: { manager: 'Department Analytics', supervisor: 'Team Analytics' }
+  },
 ];
 
 export default function Navbar({ collapsed: propCollapsed, setCollapsed: propSetCollapsed }) {
@@ -35,16 +67,10 @@ export default function Navbar({ collapsed: propCollapsed, setCollapsed: propSet
     if (!item.roles) return true;
     return item.roles.includes(user?.role || 'technician');
   }).map(item => {
-    if (isTechnician && item.path === '/') {
-      return { ...item, label: 'My Assigned Work' };
-    }
-    if (isTechnician && item.path === '/work-orders') {
-      return { ...item, label: 'My Work Orders' };
-    }
-    if (isTechnician && item.path === '/tablet-entry') {
-      return { ...item, label: 'Repair & Photo Log', badge: 'Technician' };
-    }
-    return item;
+    const userRole = user?.role;
+    const label = (item.roleLabels?.[userRole]) || item.label;
+    const badge = (item.roleBadges?.[userRole]) || item.badge;
+    return { ...item, label, badge };
   });
 
   const collapsed = propCollapsed !== undefined ? propCollapsed : internalCollapsed;
