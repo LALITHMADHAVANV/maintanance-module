@@ -50,6 +50,7 @@ const PERMISSION_MATRIX = {
     create: ['admin'],
     edit:   ['admin'],
     use:    ['admin', 'supervisor', 'technician'],
+    restock: ['admin', 'supervisor'],
     delete: ['admin'],
   },
   users: {
