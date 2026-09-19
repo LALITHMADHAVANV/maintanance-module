@@ -3,7 +3,8 @@ import { useWorkOrders } from '../hooks/useWorkOrders';
 import { useSpecialists } from '../hooks/useSpecialists';
 import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../hooks/usePermission';
-import { mockMachines, mockUsers, PROBLEM_TYPES } from '../services/mockData';
+import { useMachines } from '../hooks/useMachines';
+import { mockUsers, PROBLEM_TYPES } from '../services/mockData';
 import {
   ClipboardList, Plus, Search, Filter, X, Play, CheckCircle2, XCircle,
   Clock, Timer, DollarSign, AlertTriangle, Camera, Send, UserCheck, ShieldOff, Eye
@@ -22,6 +23,7 @@ export default function WorkOrders() {
     filterPriority, setFilterPriority, addWorkOrder, updateStatus,
     updateWorkOrder, deleteWorkOrder, stats: globalStats
   } = useWorkOrders();
+  const { allMachines: machines } = useMachines();
   const { findSpecialists, problemTypes } = useSpecialists();
 
   // Role-based order scoping
@@ -142,7 +144,7 @@ export default function WorkOrders() {
   };
 
   const handleSubmitOrder = () => {
-    const machine = mockMachines.find(m => m.id === form.machine_id);
+    const machine = machines.find(m => m.id === form.machine_id);
     const tech = mockUsers.find(u => u.id === form.assigned_technician);
     const problem = PROBLEM_TYPES.find(p => p.id === form.problem_type);
 
@@ -391,7 +393,7 @@ export default function WorkOrders() {
                   <label>Select Machine</label>
                   <select className="select-field" value={form.machine_id} onChange={e => { setForm(prev => ({ ...prev, machine_id: e.target.value })); if (e.target.value) setStep(2); }}>
                     <option value="">Choose a machine...</option>
-                    {mockMachines.map(m => (
+                    {machines.map(m => (
                       <option key={m.id} value={m.id}>{m.name} — {m.brand} ({m.location})</option>
                     ))}
                   </select>
@@ -501,7 +503,7 @@ export default function WorkOrders() {
                 <div className="card" style={{ marginBottom: 'var(--space-4)' }}>
                   <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-3)' }}>Order Summary</h3>
                   {[
-                    { label: 'Machine', value: mockMachines.find(m => m.id === form.machine_id)?.name },
+                    { label: 'Machine', value: machines.find(m => m.id === form.machine_id)?.name },
                     { label: 'Problem', value: PROBLEM_TYPES.find(p => p.id === form.problem_type)?.label },
                     { label: 'Priority', value: form.priority },
                     { label: 'Technician', value: mockUsers.find(u => u.id === form.assigned_technician)?.name },

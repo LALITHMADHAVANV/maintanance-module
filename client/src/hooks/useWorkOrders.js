@@ -1,20 +1,47 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { workOrdersAPI } from '../services/api';
 import { mockWorkOrders } from '../services/mockData';
 
 export function useWorkOrders() {
-  const [workOrders, setWorkOrders] = useState(mockWorkOrders);
-  const [loading, setLoading] = useState(false);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
 
+  const loadWorkOrders = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await workOrdersAPI.getAll();
+      setWorkOrders(res.data || []);
+    } catch (err) {
+      console.warn('API fetch failed, falling back to local data.', err);
+      if (workOrders.length === 0) {
+        // Fallback: try localStorage, otherwise use mockData
+        const localData = localStorage.getItem('mock_workorders');
+        if (localData) {
+          setWorkOrders(JSON.parse(localData));
+        } else {
+          setWorkOrders(mockWorkOrders);
+          localStorage.setItem('mock_workorders', JSON.stringify(mockWorkOrders));
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [workOrders.length]);
+
+  useEffect(() => {
+    loadWorkOrders();
+  }, [loadWorkOrders]);
+
   const filteredOrders = useMemo(() => {
     return workOrders.filter(wo => {
       const matchSearch = !search ||
-        wo.issue_reported.toLowerCase().includes(search.toLowerCase()) ||
-        wo.machine_name?.toLowerCase().includes(search.toLowerCase()) ||
-        wo.technician_name?.toLowerCase().includes(search.toLowerCase()) ||
-        wo.id.toLowerCase().includes(search.toLowerCase());
+        (wo.issue_reported && wo.issue_reported.toLowerCase().includes(search.toLowerCase())) ||
+        (wo.machine_name && wo.machine_name.toLowerCase().includes(search.toLowerCase())) ||
+        (wo.technician_name && wo.technician_name.toLowerCase().includes(search.toLowerCase())) ||
+        (wo.id && wo.id.toLowerCase().includes(search.toLowerCase()));
       const matchStatus = filterStatus === 'all' || wo.status === filterStatus;
       const matchPriority = filterPriority === 'all' || wo.priority === filterPriority;
       return matchSearch && matchStatus && matchPriority;
@@ -25,55 +52,92 @@ export function useWorkOrders() {
     return workOrders.find(wo => wo.id === id);
   }, [workOrders]);
 
-  const addWorkOrder = useCallback((data) => {
-    const newWO = {
-      id: `wo_${Date.now()}`,
-      status: 'pending',
-      priority: data.priority || 'medium',
-      waiting_time_minutes: 0,
-      fixing_time_minutes: null,
-      cost: null,
-      created_at: new Date().toISOString(),
-      started_at: null,
-      completed_at: null,
-      ...data,
-    };
-    setWorkOrders(prev => [newWO, ...prev]);
-    return newWO;
+  const addWorkOrder = useCallback(async (data) => {
+    try {
+      const res = await workOrdersAPI.create(data);
+      setWorkOrders(prev => [res.data, ...prev]);
+      return res.data;
+    } catch (err) {
+      console.warn('API create failed, modifying local state.', err);
+      const newWO = {
+        id: `wo_${Date.now()}`,
+        status: 'pending',
+        priority: data.priority || 'medium',
+        waiting_time_minutes: 0,
+        fixing_time_minutes: null,
+        cost: null,
+        created_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: null,
+        ...data,
+      };
+      setWorkOrders(prev => {
+        const next = [newWO, ...prev];
+        localStorage.setItem('mock_workorders', JSON.stringify(next));
+        return next;
+      });
+      return newWO;
+    }
   }, []);
 
-  const updateWorkOrder = useCallback((id, data) => {
-    setWorkOrders(prev =>
-      prev.map(wo => wo.id === id ? { ...wo, ...data } : wo)
-    );
+  const updateWorkOrder = useCallback(async (id, data) => {
+    try {
+      const res = await workOrdersAPI.update(id, data);
+      setWorkOrders(prev => prev.map(wo => wo.id === id ? res.data : wo));
+    } catch (err) {
+      console.warn('API update failed, modifying local state.', err);
+      setWorkOrders(prev => {
+        const next = prev.map(wo => wo.id === id ? { ...wo, ...data } : wo);
+        localStorage.setItem('mock_workorders', JSON.stringify(next));
+        return next;
+      });
+    }
   }, []);
 
-  const updateStatus = useCallback((id, status) => {
-    setWorkOrders(prev =>
-      prev.map(wo => {
-        if (wo.id !== id) return wo;
-        const updates = { status };
-        if (status === 'in_progress' && !wo.started_at) {
-          updates.started_at = new Date().toISOString();
-          updates.waiting_time_minutes = Math.round(
-            (Date.now() - new Date(wo.created_at).getTime()) / 60000
-          );
-        }
-        if (status === 'completed' && !wo.completed_at) {
-          updates.completed_at = new Date().toISOString();
-          if (wo.started_at) {
-            updates.fixing_time_minutes = Math.round(
-              (Date.now() - new Date(wo.started_at).getTime()) / 60000
+  const updateStatus = useCallback(async (id, status) => {
+    try {
+      const res = await workOrdersAPI.updateStatus(id, status);
+      setWorkOrders(prev => prev.map(wo => wo.id === id ? res.data : wo));
+    } catch (err) {
+      console.warn('API updateStatus failed, modifying local state.', err);
+      setWorkOrders(prev => {
+        const next = prev.map(wo => {
+          if (wo.id !== id) return wo;
+          const updates = { status };
+          if (status === 'in_progress' && !wo.started_at) {
+            updates.started_at = new Date().toISOString();
+            updates.waiting_time_minutes = Math.round(
+              (Date.now() - new Date(wo.created_at).getTime()) / 60000
             );
           }
-        }
-        return { ...wo, ...updates };
-      })
-    );
+          if (status === 'completed' && !wo.completed_at) {
+            updates.completed_at = new Date().toISOString();
+            if (wo.started_at) {
+              updates.fixing_time_minutes = Math.round(
+                (Date.now() - new Date(wo.started_at).getTime()) / 60000
+              );
+            }
+          }
+          return { ...wo, ...updates };
+        });
+        localStorage.setItem('mock_workorders', JSON.stringify(next));
+        return next;
+      });
+    }
   }, []);
 
-  const deleteWorkOrder = useCallback((id) => {
-    setWorkOrders(prev => prev.filter(wo => wo.id !== id));
+  const deleteWorkOrder = useCallback(async (id) => {
+    try {
+      await workOrdersAPI.delete(id);
+      setWorkOrders(prev => prev.filter(wo => wo.id !== id));
+    } catch (err) {
+      console.warn('API delete failed, modifying local state.', err);
+      setWorkOrders(prev => {
+        const next = prev.filter(wo => wo.id !== id);
+        localStorage.setItem('mock_workorders', JSON.stringify(next));
+        return next;
+      });
+    }
   }, []);
 
   const stats = useMemo(() => {
@@ -115,5 +179,6 @@ export function useWorkOrders() {
     deleteWorkOrder,
     stats,
     getByMachine,
+    refreshWorkOrders: loadWorkOrders
   };
 }

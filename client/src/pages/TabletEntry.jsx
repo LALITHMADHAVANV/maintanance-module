@@ -6,8 +6,11 @@ import {
   Thermometer, Wind, Zap, RefreshCw, Send, CheckCircle, Flame,
   SlidersHorizontal, Radio, ShieldCheck, FileSpreadsheet, X, SwitchCamera
 } from 'lucide-react';
-import { mockMachines, mockUsers, PROBLEM_TYPES, mockSpareParts, mockWorkOrders } from '../services/mockData';
+import { mockUsers, PROBLEM_TYPES } from '../services/mockData';
 import { useAuth } from '../context/AuthContext';
+import { useMachines } from '../hooks/useMachines';
+import { useWorkOrders } from '../hooks/useWorkOrders';
+import { useSpareParts } from '../hooks/useSpareParts';
 
 export default function TabletEntry() {
   const { user } = useAuth();
@@ -29,9 +32,9 @@ export default function TabletEntry() {
   const [repairPhotoError, setRepairPhotoError] = useState(false);
 
   // Live state tracking
-  const [machines, setMachines] = useState(mockMachines);
-  const [workOrders, setWorkOrders] = useState(mockWorkOrders);
-  const [spareParts, setSpareParts] = useState(mockSpareParts);
+  const { allMachines: machines, updateMachine, addMachine } = useMachines();
+  const { allWorkOrders: workOrders, addWorkOrder, updateWorkOrder } = useWorkOrders();
+  const { parts: spareParts, updatePart } = useSpareParts();
   const [recentEntries, setRecentEntries] = useState([
     {
       id: 'ent-01',
@@ -240,10 +243,10 @@ export default function TabletEntry() {
       created_at: new Date().toISOString(),
     };
 
-    setWorkOrders(prev => [newWO, ...prev]);
+    addWorkOrder(newWO);
 
     // Mark machine as maintenance
-    setMachines(prev => prev.map(m => m.id === machine?.id ? { ...m, status: 'maintenance' } : m));
+    if(machine) updateMachine(machine.id, { status: 'maintenance' });
 
     // Add to tablet recent activity
     setRecentEntries(prev => [
@@ -311,7 +314,7 @@ export default function TabletEntry() {
     const isCritical = inspectForm.temperature > 85 || inspectForm.vibration > 7.0;
 
     if (isCritical) {
-      setMachines(prev => prev.map(m => m.id === machine?.id ? { ...m, status: 'maintenance' } : m));
+      if(machine) updateMachine(machine.id, { status: 'maintenance' });
     }
 
     setRecentEntries(prev => [
@@ -340,7 +343,7 @@ export default function TabletEntry() {
   const selectedMachine = machines.find(m => m.id === selectedMachineId) || machines[0];
 
   const handleUpdateStatus = (status) => {
-    setMachines(prev => prev.map(m => m.id === selectedMachineId ? { ...m, status } : m));
+    updateMachine(selectedMachineId, { status });
     setRecentEntries(prev => [
       {
         id: `ent-${Date.now()}`,
@@ -358,7 +361,7 @@ export default function TabletEntry() {
   };
 
   const handleRelocateMachine = () => {
-    setMachines(prev => prev.map(m => m.id === selectedMachineId ? { ...m, location: targetLocation } : m));
+    updateMachine(selectedMachineId, { location: targetLocation });
     setRecentEntries(prev => [
       {
         id: `ent-${Date.now()}`,
@@ -412,8 +415,7 @@ export default function TabletEntry() {
 
     setRepairPhotoError(false);
 
-    setWorkOrders(prev => prev.map(wo => wo.id === selectedWoId ? {
-      ...wo,
+    updateWorkOrder(selectedWoId, {
       status: repairForm.status,
       fixing_time_minutes: repairForm.fixing_time_minutes,
       waiting_time_minutes: repairForm.waiting_time_minutes,
@@ -421,10 +423,10 @@ export default function TabletEntry() {
       action_taken: repairForm.action_taken,
       completion_photo_url: repairForm.completion_photo_url || null,
       completed_at: repairForm.status === 'completed' ? new Date().toISOString() : null
-    } : wo));
+    });
 
     if (repairForm.status === 'completed') {
-      setMachines(prev => prev.map(m => m.id === activeWorkOrder.machine_id ? { ...m, status: 'active' } : m));
+      updateMachine(activeWorkOrder.machine_id, { status: 'active' });
     }
 
     setRecentEntries(prev => [
@@ -467,10 +469,10 @@ export default function TabletEntry() {
       return;
     }
 
-    setSpareParts(prev => prev.map(p => p.id === partForm.part_id ? {
-      ...p,
-      quantity: p.quantity - partForm.quantity
-    } : p));
+    updatePart(partForm.part_id, {
+      ...selectedPart,
+      quantity: selectedPart.quantity - partForm.quantity
+    });
 
     const machine = machines.find(m => m.id === partForm.machine_id);
 
@@ -523,7 +525,7 @@ export default function TabletEntry() {
       created_at: new Date().toISOString()
     };
 
-    setMachines(prev => [newM, ...prev]);
+    addMachine(newM);
 
     setRecentEntries(prev => [
       {

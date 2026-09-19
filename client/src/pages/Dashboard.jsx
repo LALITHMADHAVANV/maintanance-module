@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { mockMachines, mockWorkOrders, mockPreventiveSchedules, mockUsers, mockSpareParts } from '../services/mockData';
+import { useMachines } from '../hooks/useMachines';
+import { useWorkOrders } from '../hooks/useWorkOrders';
+import { useSpareParts } from '../hooks/useSpareParts';
+import { mockPreventiveSchedules, mockUsers } from '../services/mockData';
 import NotificationBell from '../components/NotificationBell';
 import {
   Settings2, ClipboardList, AlertTriangle, Clock, CheckCircle2,
@@ -15,6 +18,11 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const isTechnician = user?.role === 'technician';
+
+  // Live Data Hooks
+  const { allMachines: mockMachines } = useMachines();
+  const { allWorkOrders: mockWorkOrders } = useWorkOrders();
+  const { parts: mockSpareParts } = useSpareParts();
 
   // Global supervisor/admin stats
   const adminStats = useMemo(() => {
@@ -30,7 +38,7 @@ export default function Dashboard() {
     const overdue = mockPreventiveSchedules.filter(ps => new Date(ps.next_due) < new Date()).length;
 
     return { active, maintenance, pending, inProgress, completed, totalDowntime, onlineTechs, overdue, totalMachines: mockMachines.length };
-  }, []);
+  }, [mockMachines, mockWorkOrders]);
 
   // Technician-only assigned work orders
   const myWorkOrders = useMemo(() => {
@@ -39,7 +47,7 @@ export default function Dashboard() {
       wo.technician_name === user?.name ||
       (user?.id === 'usr_006' && !wo.assigned_technician)
     );
-  }, [user]);
+  }, [user, mockWorkOrders]);
 
   const techStats = useMemo(() => {
     const pending = myWorkOrders.filter(wo => wo.status === 'pending').length;

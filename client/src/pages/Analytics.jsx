@@ -1,13 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
-import { getDowntimeData, getCostData, getPerformanceData, getBrandComparisonData, mockWorkOrders, mockMachines, mockExpenses } from '../services/mockData';
-import { BarChart3, Clock, DollarSign, TrendingUp, Download, Filter, ShieldOff } from 'lucide-react';
+import { analyticsAPI } from '../services/api';
+import { useMachines } from '../hooks/useMachines';
+import { useWorkOrders } from '../hooks/useWorkOrders';
+import { BarChart3, Clock, DollarSign, TrendingUp, Download, ShieldOff } from 'lucide-react';
 import { usePermission } from '../hooks/usePermission';
 import { useAuth } from '../context/AuthContext';
+import { getDowntimeData, getCostData, getPerformanceData, getBrandComparisonData } from '../services/mockData';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -32,38 +35,92 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function Analytics() {
   const [activeTab, setActiveTab] = useState('downtime');
   const [period, setPeriod] = useState('month');
-  const { can, role, isSupervisor, isAdmin, isManager } = usePermission();
-  const { user } = useAuth();
+  const { can, isSupervisor } = usePermission();
   const canExport = can('analytics', 'export');
 
-  const downtimeData = useMemo(() => getDowntimeData(), []);
-  const costData = useMemo(() => getCostData(), []);
-  const performanceData = useMemo(() => getPerformanceData(), []);
-  const brandData = useMemo(() => getBrandComparisonData(), []);
+  // We load the actual machines/workorders to calculate real-time distributions
+  const { allMachines } = useMachines();
+  const { allWorkOrders } = useWorkOrders();
 
-  // Machine type distribution
+  const [downtimeData, setDowntimeData] = useState([]);
+  const [costData, setCostData] = useState([]);
+  const [performanceData, setPerformanceData] = useState([]);
+  const [brandData, setBrandData] = useState([]);
+  const [monthlyExpenses, setMonthlyExpenses] = useState([]);
+
+  useEffect(() => {
+    // Attempt to fetch from real APIs
+    const fetchData = async () => {
+      try {
+        const [downRes, costRes, perfRes] = await Promise.all([
+          analyticsAPI.getDowntime({ period }),
+          analyticsAPI.getCost({ period }),
+          analyticsAPI.getPerformance({ period })
+        ]);
+        
+        // If API returns data, use it, otherwise fall back to mock generators
+        setDowntimeData(downRes.data.length ? downRes.data : getDowntimeData());
+        
+        // Example handling of expenses from DB
+        if (costRes.data.length) {
+           const months = {};
+           costRes.data.forEach(e => {
+             const month = (e.date || e.created_at).substring(0, 7);
+             months[month] = (months[month] || 0) + e.amount;
+           });
+           setMonthlyExpenses(Object.entries(months).map(([name, amount]) => ({ name, amount })).sort((a, b) => a.name.localeCompare(b.name)));
+           setCostData(getCostData()); // Use mock for the categorized bar chart for now
+        } else {
+           setCostData(getCostData());
+           setMonthlyExpenses([
+             { name: '2024-01', amount: 4000 },
+             { name: '2024-02', amount: 3500 },
+             { name: '2024-03', amount: 5200 },
+             { name: '2024-04', amount: 4800 },
+           ]);
+        }
+
+        setPerformanceData(perfRes.data.machines?.length ? perfRes.data.performance : getPerformanceData());
+        setBrandData(getBrandComparisonData());
+
+      } catch (err) {
+        console.warn('Analytics API failed, falling back to local generated mock data', err);
+        setDowntimeData(getDowntimeData());
+        setCostData(getCostData());
+        setPerformanceData(getPerformanceData());
+        setBrandData(getBrandComparisonData());
+        setMonthlyExpenses([
+             { name: '2024-01', amount: 4000 },
+             { name: '2024-02', amount: 3500 },
+             { name: '2024-03', amount: 5200 },
+             { name: '2024-04', amount: 4800 },
+        ]);
+      }
+    };
+    fetchData();
+  }, [period]);
+
+  // Machine type distribution (Now fully reactive!)
   const typeDistribution = useMemo(() => {
     const counts = {};
-    mockMachines.forEach(m => { counts[m.machine_type] = (counts[m.machine_type] || 0) + 1; });
-    return Object.entries(counts).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
-  }, []);
+    allMachines.forEach(m => { counts[m.machine_type] = (counts[m.machine_type] || 0) + 1; });
+    return Object.entries(counts).map(([name, value]) => ({ 
+      name: name.charAt(0).toUpperCase() + name.slice(1), 
+      value 
+    }));
+  }, [allMachines]);
 
-  // Status distribution
+  // Status distribution (Now fully reactive!)
   const statusDistribution = useMemo(() => {
     const counts = { completed: 0, in_progress: 0, pending: 0, cancelled: 0 };
-    mockWorkOrders.forEach(wo => { counts[wo.status]++; });
-    return Object.entries(counts).map(([name, value]) => ({ name: name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()), value }));
-  }, []);
-
-  // Monthly expenses
-  const monthlyExpenses = useMemo(() => {
-    const months = {};
-    mockExpenses.forEach(e => {
-      const month = e.date.substring(0, 7);
-      months[month] = (months[month] || 0) + e.amount;
+    allWorkOrders.forEach(wo => { 
+      if (counts[wo.status] !== undefined) counts[wo.status]++; 
     });
-    return Object.entries(months).map(([name, amount]) => ({ name, amount })).sort((a, b) => a.name.localeCompare(b.name));
-  }, []);
+    return Object.entries(counts).map(([name, value]) => ({ 
+      name: name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()), 
+      value 
+    }));
+  }, [allWorkOrders]);
 
   return (
     <div style={{ animation: 'fadeInUp 0.4s ease' }}>
