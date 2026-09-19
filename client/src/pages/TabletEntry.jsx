@@ -36,9 +36,9 @@ export default function TabletEntry() {
     {
       id: 'ent-01',
       type: 'issue',
-      title: 'Needle Break on Sewing Machine 1',
-      machine: 'Sewing Machine 1',
-      location: 'Floor 1 - Section A',
+      title: 'Needle Break on Single Needle Machine 5',
+      machine: 'Single Needle Machine 5',
+      location: 'Floor 1 - Line 1',
       time: '10 mins ago',
       status: 'Reported',
       badge: 'badge-danger'
@@ -48,7 +48,7 @@ export default function TabletEntry() {
       type: 'inspection',
       title: 'Daily Checklist & Telemetry Log',
       machine: 'Cutting Machine 5',
-      location: 'Floor 2 - Section A',
+      location: 'Floor 1 - Line 2',
       time: '24 mins ago',
       status: 'Passed (Safe)',
       badge: 'badge-success'
@@ -58,7 +58,7 @@ export default function TabletEntry() {
       type: 'parts',
       title: '2x Needle DB×1 #14 Issued',
       machine: 'Sewing Machine 3',
-      location: 'Floor 1 - Section C',
+      location: 'Floor 1 - Line 3',
       time: '45 mins ago',
       status: 'Stock Deducted',
       badge: 'badge-info'
@@ -335,7 +335,7 @@ export default function TabletEntry() {
   // 3. MACHINE LIVE STATUS & LOCATION MOVER
   // -------------------------------------------------------------
   const [selectedMachineId, setSelectedMachineId] = useState('mch_001');
-  const [targetLocation, setTargetLocation] = useState('Floor 1 - Section A');
+  const [targetLocation, setTargetLocation] = useState('Floor 1 - Line 1');
 
   const selectedMachine = machines.find(m => m.id === selectedMachineId) || machines[0];
 
@@ -497,10 +497,10 @@ export default function TabletEntry() {
   // -------------------------------------------------------------
   const [newMachineForm, setNewMachineForm] = useState({
     name: '',
-    machine_type: 'sewing',
+    machine_type: 'single-needle',
     brand: 'Juki',
     model: 'DDL-9000C',
-    location: 'Floor 1 - Section A',
+    location: 'Floor 1 - Line 1',
     status: 'active'
   });
 
@@ -542,10 +542,10 @@ export default function TabletEntry() {
     showToast(`Machine ${newM.name} successfully registered to ${newM.location}!`);
     setNewMachineForm({
       name: '',
-      machine_type: 'sewing',
+      machine_type: 'single-needle',
       brand: 'Juki',
       model: 'DDL-9000C',
-      location: 'Floor 1 - Section A',
+      location: 'Floor 1 - Line 1',
       status: 'active'
     });
   };
@@ -603,10 +603,8 @@ export default function TabletEntry() {
               onChange={(e) => setSelectedFloor(e.target.value)}
               className="tab-select-clean"
             >
-              <option value="All Floors">All Floor Sections</option>
-              <option value="Floor 1">Floor 1 (Sewing / Cutting)</option>
-              <option value="Floor 2">Floor 2 (Dyeing / Pressing)</option>
-              <option value="Floor 3">Floor 3 (Finishing / Packing)</option>
+              <option value="All Floors">All Floors</option>
+              <option value="Floor 1">Floor 1</option>
             </select>
           </div>
 
@@ -1299,16 +1297,14 @@ export default function TabletEntry() {
                       value={targetLocation}
                       onChange={(e) => setTargetLocation(e.target.value)}
                     >
-                      <option value="Floor 1 - Section A">Floor 1 - Section A (Lockstitch Line 1)</option>
-                      <option value="Floor 1 - Section B">Floor 1 - Section B (Overlock Line 2)</option>
-                      <option value="Floor 1 - Section C">Floor 1 - Section C (Interlock Line 3)</option>
-                      <option value="Floor 2 - Section A">Floor 2 - Section A (Cutting Room)</option>
-                      <option value="Floor 2 - Section B">Floor 2 - Section B (Pressing & Steam)</option>
-                      <option value="Floor 2 - Section C">Floor 2 - Section C (Dyeing & Wash)</option>
-                      <option value="Floor 3 - Section A">Floor 3 - Section A (Finishing & Label)</option>
-                      <option value="Floor 3 - Section B">Floor 3 - Section B (Packing & Export)</option>
-                      <option value="Quality Lab">Quality Lab / Test Bench</option>
-                      <option value="Warehouse">Warehouse Maintenance Bay</option>
+                      <option value="Floor 1 - Line 1">Floor 1 - Line 1</option>
+                      <option value="Floor 1 - Line 2">Floor 1 - Line 2</option>
+                      <option value="Floor 1 - Line 3">Floor 1 - Line 3</option>
+                      <option value="Floor 1 - Line 4">Floor 1 - Line 4</option>
+                      <option value="Floor 1 - Line 5">Floor 1 - Line 5</option>
+                      <option value="Floor 1 - Quality Control">Floor 1 - Quality Control</option>
+                      <option value="Floor 1 - Maintenance">Floor 1 - Maintenance</option>
+                      <option value="Floor 1 - Parts Room">Floor 1 - Parts Room</option>
                     </select>
 
                     <button
@@ -1858,15 +1854,14 @@ export default function TabletEntry() {
                       value={newMachineForm.machine_type}
                       onChange={(e) => setNewMachineForm({ ...newMachineForm, machine_type: e.target.value })}
                     >
-                      <option value="sewing">Sewing</option>
-                      <option value="cutting">Cutting</option>
-                      <option value="pressing">Pressing</option>
-                      <option value="dyeing">Dyeing</option>
-                      <option value="knitting">Knitting</option>
-                      <option value="embroidery">Embroidery</option>
-                      <option value="finishing">Finishing</option>
-                      <option value="inspection">Inspection</option>
-                      <option value="packaging">Packaging</option>
+                      <option value="single-needle">Single Needle</option>
+                      <option value="double-needle">Double Needle</option>
+                      <option value="overlock">Overlock</option>
+                      <option value="flatlock">Flatlock</option>
+                      <option value="button-hole">Button Hole</option>
+                      <option value="button-attach">Button Attach</option>
+                      <option value="bartack">Bartack</option>
+                      <option value="feed-off-arm">Feed Off Arm</option>
                     </select>
                   </div>
                 </div>
@@ -1909,12 +1904,14 @@ export default function TabletEntry() {
                     value={newMachineForm.location}
                     onChange={(e) => setNewMachineForm({ ...newMachineForm, location: e.target.value })}
                   >
-                    <option value="Floor 1 - Section A">Floor 1 - Section A</option>
-                    <option value="Floor 1 - Section B">Floor 1 - Section B</option>
-                    <option value="Floor 1 - Section C">Floor 1 - Section C</option>
-                    <option value="Floor 2 - Section A">Floor 2 - Section A</option>
-                    <option value="Floor 2 - Section B">Floor 2 - Section B</option>
-                    <option value="Floor 3 - Section A">Floor 3 - Section A</option>
+                    <option value="Floor 1 - Line 1">Floor 1 - Line 1</option>
+                    <option value="Floor 1 - Line 2">Floor 1 - Line 2</option>
+                    <option value="Floor 1 - Line 3">Floor 1 - Line 3</option>
+                    <option value="Floor 1 - Line 4">Floor 1 - Line 4</option>
+                    <option value="Floor 1 - Line 5">Floor 1 - Line 5</option>
+                    <option value="Floor 1 - Quality Control">Floor 1 - Quality Control</option>
+                    <option value="Floor 1 - Maintenance">Floor 1 - Maintenance</option>
+                    <option value="Floor 1 - Parts Room">Floor 1 - Parts Room</option>
                   </select>
                 </div>
 

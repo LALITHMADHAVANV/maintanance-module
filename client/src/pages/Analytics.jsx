@@ -127,10 +127,10 @@ export default function Analytics() {
                 <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="sewing" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="cutting" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="pressing" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="dyeing" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="single-needle" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="double-needle" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="overlock" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="bartack" fill="#a855f7" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="other" fill="#64748b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -146,9 +146,9 @@ export default function Analytics() {
                 <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="sewing" stackId="1" stroke="#3b82f6" fill="rgba(59,130,246,0.2)" />
-                <Area type="monotone" dataKey="cutting" stackId="1" stroke="#10b981" fill="rgba(16,185,129,0.2)" />
-                <Area type="monotone" dataKey="pressing" stackId="1" stroke="#f59e0b" fill="rgba(245,158,11,0.2)" />
+                <Area type="monotone" dataKey="single-needle" stackId="1" stroke="#3b82f6" fill="rgba(59,130,246,0.2)" />
+                <Area type="monotone" dataKey="double-needle" stackId="1" stroke="#10b981" fill="rgba(16,185,129,0.2)" />
+                <Area type="monotone" dataKey="overlock" stackId="1" stroke="#f59e0b" fill="rgba(245,158,11,0.2)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

@@ -40,7 +40,7 @@ CREATE INDEX idx_machines_status ON machines(status);
 CREATE TABLE specialist_skills (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  skill_category VARCHAR(50) NOT NULL CHECK (skill_category IN ('sewing', 'cutting', 'pressing', 'motor', 'electrical', 'dyeing', 'general')),
+  skill_category VARCHAR(50) NOT NULL CHECK (skill_category IN ('stitching', 'hardware', 'motor', 'electrical', 'maintenance', 'general')),
   expertise_level VARCHAR(20) NOT NULL DEFAULT 'beginner' CHECK (expertise_level IN ('beginner', 'intermediate', 'expert')),
   machines_handled INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
