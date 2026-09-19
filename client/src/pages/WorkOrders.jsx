@@ -17,6 +17,14 @@ export default function WorkOrders() {
 
   const [showModal, setShowModal] = useState(false);
   const [selectedWO, setSelectedWO] = useState(null);
+  const [completeModalWO, setCompleteModalWO] = useState(null);
+  const [completeForm, setCompleteForm] = useState({
+    fixing_time_minutes: 45,
+    cost: 350,
+    action_taken: '',
+    photo: null,
+    photoError: false,
+  });
   const [step, setStep] = useState(1); // 1=machine, 2=issue, 3=specialist, 4=confirm
   const [form, setForm] = useState({
     machine_id: '', problem_type: '', issue_detail: '', priority: 'medium',
@@ -26,6 +34,45 @@ export default function WorkOrders() {
 
   const woStatusColors = { pending: 'badge-warning', in_progress: 'badge-info', completed: 'badge-success', cancelled: 'badge-danger' };
   const priorityColors = { critical: 'badge-danger', high: 'badge-warning', medium: 'badge-info', low: 'badge-neutral' };
+
+  const openCompleteModal = (wo) => {
+    setCompleteModalWO(wo);
+    setCompleteForm({
+      fixing_time_minutes: wo.fixing_time_minutes || 45,
+      cost: wo.cost || 350,
+      action_taken: 'Replaced worn parts & adjusted needle timing. Cleaned and lubricated unit.',
+      photo: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=500', // Default sample proof photo
+      photoError: false
+    });
+  };
+
+  const handleCompleteSubmit = () => {
+    if (!completeForm.photo) {
+      setCompleteForm(prev => ({ ...prev, photoError: true }));
+      return;
+    }
+
+    if (completeModalWO) {
+      updateWorkOrder(completeModalWO.id, {
+        status: 'completed',
+        fixing_time_minutes: Number(completeForm.fixing_time_minutes) || 30,
+        cost: Number(completeForm.cost) || 0,
+        action_taken: completeForm.action_taken,
+        completion_photo: completeForm.photo,
+        completed_at: new Date().toISOString()
+      });
+      setCompleteModalWO(null);
+    }
+  };
+
+  const handleCompletePhotoCapture = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => setCompleteForm(prev => ({ ...prev, photo: reader.result, photoError: false }));
+      reader.readAsDataURL(file);
+    }
+  };
 
   const openCreate = () => {
     setForm({ machine_id: '', problem_type: '', issue_detail: '', priority: 'medium', assigned_technician: '', photo: null });
@@ -191,7 +238,7 @@ export default function WorkOrders() {
                       <button className="btn btn-success btn-sm" onClick={() => updateStatus(wo.id, 'in_progress')} title="Start"><Play size={13} /></button>
                     )}
                     {wo.status === 'in_progress' && (
-                      <button className="btn btn-primary btn-sm" onClick={() => updateStatus(wo.id, 'completed')} title="Complete"><CheckCircle2 size={13} /></button>
+                      <button className="btn btn-primary btn-sm" onClick={() => openCompleteModal(wo)} title="Complete Task with Photo Verification"><CheckCircle2 size={13} /></button>
                     )}
                     {(wo.status === 'pending' || wo.status === 'in_progress') && (
                       <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-400)' }} onClick={() => updateStatus(wo.id, 'cancelled')} title="Cancel"><XCircle size={13} /></button>
@@ -406,6 +453,163 @@ export default function WorkOrders() {
                   <span style={{ fontWeight: 500 }}>{item.value}</span>
                 </div>
               ))}
+
+              {/* Completion Photo Proof in Detail View */}
+              {selectedWO.completion_photo && (
+                <div style={{ marginTop: 'var(--space-3)' }}>
+                  <label style={{ fontSize: 'var(--font-xs)', fontWeight: 700, color: 'var(--emerald-400)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <CheckCircle2 size={14} /> Technician Completion Proof Photo
+                  </label>
+                  <img
+                    src={selectedWO.completion_photo}
+                    alt="Completion Proof"
+                    style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)' }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Work Order Modal (Mandatory Technician Photo Verification) */}
+      {completeModalWO && (
+        <div className="modal-overlay" onClick={() => setCompleteModalWO(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <div>
+                <h2>Complete Work Order</h2>
+                <span className="text-muted text-xs">Technician Verification & Proof</span>
+              </div>
+              <button className="btn-icon" onClick={() => setCompleteModalWO(null)}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className="card" style={{ background: 'var(--bg-input)', padding: 'var(--space-3)' }}>
+                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Order & Machine:</div>
+                <strong style={{ fontSize: 'var(--font-md)' }}>{completeModalWO.id.toUpperCase()} — {completeModalWO.machine_name}</strong>
+                <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', margin: '4px 0 0' }}>{completeModalWO.issue_reported}</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="input-group">
+                  <label>Fixing Time (Minutes)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={completeForm.fixing_time_minutes}
+                    onChange={e => setCompleteForm(prev => ({ ...prev, fixing_time_minutes: e.target.value }))}
+                  />
+                </div>
+                <div className="input-group">
+                  <label>Repair / Parts Cost (₹)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={completeForm.cost}
+                    onChange={e => setCompleteForm(prev => ({ ...prev, cost: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label>Corrective Action Taken</label>
+                <textarea
+                  className="input-field"
+                  rows={2}
+                  value={completeForm.action_taken}
+                  onChange={e => setCompleteForm(prev => ({ ...prev, action_taken: e.target.value }))}
+                  placeholder="Details of repair done..."
+                />
+              </div>
+
+              {/* MANDATORY TECHNICIAN COMPLETION PHOTO */}
+              <div className="input-group">
+                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Mandatory Completion Photo (Proof of Fix)</span>
+                  <span className="badge badge-danger" style={{ fontSize: 10 }}>* Required</span>
+                </label>
+
+                {completeForm.photoError && !completeForm.photo && (
+                  <div style={{
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    color: '#fca5a5',
+                    fontSize: 12,
+                    marginBottom: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    <AlertTriangle size={14} />
+                    <span>Technician photo is required to complete this work order.</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <label className="btn btn-ghost" style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }}>
+                    <Camera size={16} /> Take Photo
+                    <input type="file" accept="image/*" capture="environment" onChange={handleCompletePhotoCapture} style={{ display: 'none' }} />
+                  </label>
+                  <label className="btn btn-ghost" style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }}>
+                    📁 Upload File
+                    <input type="file" accept="image/*" onChange={handleCompletePhotoCapture} style={{ display: 'none' }} />
+                  </label>
+                </div>
+
+                {completeForm.photo ? (
+                  <div style={{ position: 'relative' }}>
+                    <img
+                      src={completeForm.photo}
+                      alt="Completion Preview"
+                      style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 'var(--radius-md)', border: '2px solid #10b981' }}
+                    />
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)', color: 'white' }}
+                      onClick={() => setCompleteForm(prev => ({ ...prev, photo: null }))}
+                    >
+                      <X size={14} />
+                    </button>
+                    <span style={{
+                      position: 'absolute', bottom: 6, left: 6,
+                      background: '#10b981', color: 'white',
+                      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--radius-full)'
+                    }}>
+                      ✅ Proof Attached
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                    <span className="text-muted text-xs" style={{ width: '100%' }}>Or choose a sample proof photo:</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setCompleteForm(prev => ({ ...prev, photo: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=500', photoError: false }))}
+                    >
+                      ✅ Stitch Fix
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setCompleteForm(prev => ({ ...prev, photo: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500', photoError: false }))}
+                    >
+                      ✅ Motor Serviced
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 'var(--space-2)' }}>
+                <button className="btn btn-ghost" onClick={() => setCompleteModalWO(null)}>Cancel</button>
+                <button className="btn btn-success" style={{ flex: 1 }} onClick={handleCompleteSubmit}>
+                  <CheckCircle2 size={16} /> Complete & Close Work Order
+                </button>
+              </div>
             </div>
           </div>
         </div>

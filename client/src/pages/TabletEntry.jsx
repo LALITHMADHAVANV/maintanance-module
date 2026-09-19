@@ -18,11 +18,14 @@ export default function TabletEntry() {
   
   // Camera & File capture state
   const fileInputRef = useRef(null);
+  const repairFileInputRef = useRef(null);
   const videoRef = useRef(null);
   const [isLiveCameraOpen, setIsLiveCameraOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState('issue'); // 'issue' | 'repair'
   const [cameraStream, setCameraStream] = useState(null);
   const [cameraFacingMode, setCameraFacingMode] = useState('environment'); // back camera for tablets
   const [cameraError, setCameraError] = useState(null);
+  const [repairPhotoError, setRepairPhotoError] = useState(false);
 
   // Live state tracking
   const [machines, setMachines] = useState(mockMachines);
@@ -71,7 +74,8 @@ export default function TabletEntry() {
   };
 
   // Camera Management
-  const startLiveCamera = async (facing = cameraFacingMode) => {
+  const startLiveCamera = async (target = 'issue', facing = cameraFacingMode) => {
+    setCameraTarget(target);
     setCameraError(null);
     setIsLiveCameraOpen(true);
     try {
@@ -115,9 +119,16 @@ export default function TabletEntry() {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    setIssueForm(prev => ({ ...prev, photoUrl: dataUrl }));
+
+    if (cameraTarget === 'repair') {
+      setRepairForm(prev => ({ ...prev, completion_photo_url: dataUrl }));
+      setRepairPhotoError(false);
+      showToast('After-repair completion photo captured successfully!');
+    } else {
+      setIssueForm(prev => ({ ...prev, photoUrl: dataUrl }));
+      showToast('Photo captured successfully from tablet camera!');
+    }
     stopLiveCamera();
-    showToast('Photo captured successfully from tablet camera!');
   };
 
   const handleFileInputChange = (e) => {
@@ -127,6 +138,19 @@ export default function TabletEntry() {
       reader.onload = () => {
         setIssueForm(prev => ({ ...prev, photoUrl: reader.result }));
         showToast('Photo uploaded from device!');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRepairFileInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setRepairForm(prev => ({ ...prev, completion_photo_url: reader.result }));
+        setRepairPhotoError(false);
+        showToast('After-repair photo uploaded from device!');
       };
       reader.readAsDataURL(file);
     }
@@ -359,7 +383,8 @@ export default function TabletEntry() {
     waiting_time_minutes: 15,
     cost: 450,
     action_taken: 'Replaced worn looper & timed needle bar to spec. Cleaned oil filters.',
-    status: 'completed'
+    status: 'completed',
+    completion_photo_url: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=500' // Default sample completion photo
   });
 
   const activeWorkOrder = workOrders.find(wo => wo.id === selectedWoId) || workOrders[0];
@@ -368,12 +393,23 @@ export default function TabletEntry() {
     e?.preventDefault();
     if (!activeWorkOrder) return;
 
+    // MANDATORY TECHNICIAN COMPLETION PHOTO VALIDATION
+    if (repairForm.status === 'completed' && !repairForm.completion_photo_url) {
+      setRepairPhotoError(true);
+      showToast('⚠️ MANDATORY: Technician must take or attach a completion photo of the repaired machine to complete this task!', 'error');
+      return;
+    }
+
+    setRepairPhotoError(false);
+
     setWorkOrders(prev => prev.map(wo => wo.id === selectedWoId ? {
       ...wo,
       status: repairForm.status,
       fixing_time_minutes: repairForm.fixing_time_minutes,
       waiting_time_minutes: repairForm.waiting_time_minutes,
       cost: repairForm.cost,
+      action_taken: repairForm.action_taken,
+      completion_photo_url: repairForm.completion_photo_url || null,
       completed_at: repairForm.status === 'completed' ? new Date().toISOString() : null
     } : wo));
 
@@ -390,12 +426,13 @@ export default function TabletEntry() {
         location: 'Shop Floor',
         time: 'Just now',
         status: `${repairForm.status.toUpperCase()} (₹${repairForm.cost})`,
-        badge: 'badge-success'
+        badge: 'badge-success',
+        photo: repairForm.completion_photo_url || null
       },
       ...prev
     ]);
 
-    showToast(`Work Order ${activeWorkOrder.id} logged as ${repairForm.status.toUpperCase()}! Machine restored to Active.`);
+    showToast(`Work Order ${activeWorkOrder.id} successfully updated with technician photo verification! Machine restored to Active.`);
   };
 
   // -------------------------------------------------------------
@@ -780,7 +817,7 @@ export default function TabletEntry() {
                   />
 
                   {/* LIVE CAMERA VIEWFINDER */}
-                  {isLiveCameraOpen && (
+                  {isLiveCameraOpen && cameraTarget === 'issue' && (
                     <div className="tab-camera-viewfinder">
                       <div className="camera-video-container">
                         <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
@@ -810,7 +847,7 @@ export default function TabletEntry() {
                             onClick={() => {
                               const nextFacing = cameraFacingMode === 'environment' ? 'user' : 'environment';
                               setCameraFacingMode(nextFacing);
-                              startLiveCamera(nextFacing);
+                              startLiveCamera('issue', nextFacing);
                             }}
                           >
                             <SwitchCamera size={18} />
@@ -840,7 +877,7 @@ export default function TabletEntry() {
                   )}
 
                   {/* PHOTO PREVIEW OR SELECTION BOX */}
-                  {!isLiveCameraOpen && (
+                  {(!isLiveCameraOpen || cameraTarget !== 'issue') && (
                     <div className="tab-photo-box">
                       {issueForm.photoUrl ? (
                         <div className="tab-photo-preview">
@@ -849,7 +886,7 @@ export default function TabletEntry() {
                             <button
                               type="button"
                               className="btn btn-sm btn-primary"
-                              onClick={() => startLiveCamera()}
+                              onClick={() => startLiveCamera('issue')}
                             >
                               <Camera size={14} /> Retake with Live Camera
                             </button>
@@ -875,7 +912,7 @@ export default function TabletEntry() {
                             <button
                               type="button"
                               className="tab-capture-main-btn"
-                              onClick={() => startLiveCamera()}
+                              onClick={() => startLiveCamera('issue')}
                             >
                               <div className="capture-icon-bubble">
                                 <Camera size={28} />
@@ -1407,7 +1444,7 @@ export default function TabletEntry() {
                   />
                 </div>
 
-                {/* STATUS TO SET */}
+                {/* 4. UPDATE ORDER STATUS */}
                 <div className="form-group">
                   <label className="tab-label">4. Update Order Status</label>
                   <div className="tab-priority-row">
@@ -1418,13 +1455,220 @@ export default function TabletEntry() {
                       <button
                         type="button"
                         key={s.id}
-                        className={`tab-priority-btn ${repairForm.status === s.id ? 'bg-emerald-600 text-white' : ''}`}
-                        onClick={() => setRepairForm({ ...repairForm, status: s.id })}
+                        className={`tab-priority-btn ${repairForm.status === s.id ? (s.id === 'completed' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white') : ''}`}
+                        onClick={() => {
+                          setRepairForm({ ...repairForm, status: s.id });
+                          if (s.id !== 'completed') setRepairPhotoError(false);
+                        }}
                       >
                         {s.label}
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* 5. MANDATORY COMPLETION PHOTO (PROOF OF FIX) */}
+                <div className={`form-group ${repairPhotoError ? 'has-error' : ''}`}>
+                  <label className="tab-label">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>5. Mandatory Completion Photo (Proof of Fix)</span>
+                      {repairForm.status === 'completed' && (
+                        <span className="badge badge-danger" style={{ fontSize: 10, animation: 'pulse 2s infinite' }}>
+                          * MANDATORY TO COMPLETE
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-muted text-xs">Technician proof of repaired machine</span>
+                  </label>
+
+                  {repairPhotoError && (
+                    <div className="tab-alert-warning animate-fadeIn">
+                      <AlertTriangle size={20} className="text-red-400" />
+                      <div>
+                        <strong style={{ color: 'var(--red-400)' }}>Completion Photo Required:</strong>
+                        <p style={{ margin: 0, fontSize: 13 }}>You must snap a photo with your tablet camera or upload a photo showing the machine was fixed before marking this task as COMPLETED.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hidden file input for native device camera / gallery picker for repair log */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={repairFileInputRef}
+                    style={{ display: 'none' }}
+                    onChange={handleRepairFileInputChange}
+                  />
+
+                  {/* LIVE CAMERA VIEWFINDER (IF ACTIVE IN REPAIR TAB) */}
+                  {isLiveCameraOpen && cameraTarget === 'repair' && (
+                    <div className="tab-camera-viewfinder">
+                      <div className="camera-video-container">
+                        <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
+                        <div className="viewfinder-overlay">
+                          <div className="viewfinder-corners" />
+                          <span className="viewfinder-tag">SNAP PROOF OF REPAIRED MACHINE</span>
+                        </div>
+                      </div>
+
+                      {cameraError ? (
+                        <div className="camera-error-banner">
+                          <AlertTriangle size={18} />
+                          <span>{cameraError}</span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => repairFileInputRef.current?.click()}
+                          >
+                            Upload from Device
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="camera-action-controls">
+                          <button
+                            type="button"
+                            className="camera-ctrl-btn"
+                            onClick={() => {
+                              const nextFacing = cameraFacingMode === 'environment' ? 'user' : 'environment';
+                              setCameraFacingMode(nextFacing);
+                              startLiveCamera('repair', nextFacing);
+                            }}
+                          >
+                            <SwitchCamera size={18} />
+                            <span>Flip Camera</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="camera-snap-trigger"
+                            onClick={captureFrame}
+                            title="Take Completion Photo"
+                          >
+                            <div className="snap-inner" style={{ background: '#10b981', boxShadow: '0 0 12px #10b981' }} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="camera-ctrl-btn camera-cancel"
+                            onClick={stopLiveCamera}
+                          >
+                            <X size={18} />
+                            <span>Cancel</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PHOTO PREVIEW OR SELECTION BOX */}
+                  {(!isLiveCameraOpen || cameraTarget !== 'repair') && (
+                    <div className={`tab-photo-box ${repairPhotoError && !repairForm.completion_photo_url ? 'photo-box-error' : ''}`}>
+                      {repairForm.completion_photo_url ? (
+                        <div className="tab-photo-preview">
+                          <div style={{ position: 'relative' }}>
+                            <img src={repairForm.completion_photo_url} alt="Repair Completion Proof" />
+                            <div style={{
+                              position: 'absolute', top: 12, left: 12,
+                              background: 'rgba(16, 185, 129, 0.95)', color: 'white',
+                              padding: '5px 12px', borderRadius: 'var(--radius-full)',
+                              fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6,
+                              boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                            }}>
+                              <CheckCircle size={14} /> Verification Photo Attached
+                            </div>
+                          </div>
+                          <div className="photo-preview-bar">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              onClick={() => startLiveCamera('repair')}
+                            >
+                              <Camera size={14} /> Retake with Live Camera
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-secondary"
+                              onClick={() => repairFileInputRef.current?.click()}
+                            >
+                              Browse Files / Device
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              onClick={() => setRepairForm({ ...repairForm, completion_photo_url: '' })}
+                            >
+                              Remove Photo
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="tab-photo-placeholder">
+                          <div className="tab-photo-capture-options">
+                            <button
+                              type="button"
+                              className="tab-capture-main-btn"
+                              onClick={() => startLiveCamera('repair')}
+                            >
+                              <div className="capture-icon-bubble" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
+                                <Camera size={28} />
+                              </div>
+                              <strong>Take Photo with Camera</strong>
+                              <span>Live viewfinder & snap</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="tab-capture-main-btn tab-upload-btn"
+                              onClick={() => repairFileInputRef.current?.click()}
+                            >
+                              <div className="capture-icon-bubble" style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}>
+                                <Plus size={28} />
+                              </div>
+                              <strong>Upload from Device</strong>
+                              <span>Pick gallery image / camera app</span>
+                            </button>
+                          </div>
+
+                          <div className="tab-preset-photos">
+                            <span className="text-muted text-xs">Or choose a quick demo repaired machine photo:</span>
+                            <div className="tab-photo-samples">
+                              <button
+                                type="button"
+                                className="tab-chip"
+                                onClick={() => {
+                                  setRepairForm({ ...repairForm, completion_photo_url: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=500' });
+                                  setRepairPhotoError(false);
+                                }}
+                              >
+                                ✅ Fixed Needle & Clean Stitch
+                              </button>
+                              <button
+                                type="button"
+                                className="tab-chip"
+                                onClick={() => {
+                                  setRepairForm({ ...repairForm, completion_photo_url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500' });
+                                  setRepairPhotoError(false);
+                                }}
+                              >
+                                ✅ Motor Serviced & Tested
+                              </button>
+                              <button
+                                type="button"
+                                className="tab-chip"
+                                onClick={() => {
+                                  setRepairForm({ ...repairForm, completion_photo_url: 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=500' });
+                                  setRepairPhotoError(false);
+                                }}
+                              >
+                                ✅ Steam Valve Replaced
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <button type="submit" className="tab-submit-btn tab-btn-success">
@@ -1703,6 +1947,37 @@ export default function TabletEntry() {
                     <span className="feed-time">{entry.time}</span>
                   </div>
                   <div className="feed-desc">{entry.title}</div>
+                  {entry.photo && (
+                    <div style={{ marginTop: 6, marginBottom: 4, position: 'relative' }}>
+                      <img
+                        src={entry.photo}
+                        alt="Proof"
+                        style={{
+                          width: '100%',
+                          height: '90px',
+                          objectFit: 'cover',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-default)'
+                        }}
+                      />
+                      <span style={{
+                        position: 'absolute',
+                        bottom: 6,
+                        left: 6,
+                        background: 'rgba(16, 185, 129, 0.9)',
+                        color: 'white',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-full)',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        <CheckCircle size={10} /> Photo Proof Verified
+                      </span>
+                    </div>
+                  )}
                   <div className="feed-bottom">
                     <span className="text-muted text-xs">{entry.location}</span>
                     <span className={`badge ${entry.badge}`}>{entry.status}</span>
@@ -2171,6 +2446,25 @@ export default function TabletEntry() {
           border-radius: var(--radius-xl);
           padding: 16px;
           background: var(--bg-input);
+          transition: all var(--transition-fast);
+        }
+
+        .photo-box-error {
+          border-color: #ef4444 !important;
+          background: rgba(239, 68, 68, 0.05) !important;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+
+        .tab-alert-warning {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 14px 18px;
+          border-radius: var(--radius-lg);
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          color: var(--text-primary);
+          margin-bottom: 12px;
         }
 
         .tab-camera-viewfinder {
