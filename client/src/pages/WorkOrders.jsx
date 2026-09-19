@@ -1,0 +1,415 @@
+import { useState, useCallback } from 'react';
+import { useWorkOrders } from '../hooks/useWorkOrders';
+import { useSpecialists } from '../hooks/useSpecialists';
+import { mockMachines, mockUsers, PROBLEM_TYPES } from '../services/mockData';
+import {
+  ClipboardList, Plus, Search, Filter, X, Play, CheckCircle2, XCircle,
+  Clock, Timer, DollarSign, AlertTriangle, Camera, Send
+} from 'lucide-react';
+
+export default function WorkOrders() {
+  const {
+    workOrders, search, setSearch, filterStatus, setFilterStatus,
+    filterPriority, setFilterPriority, addWorkOrder, updateStatus,
+    updateWorkOrder, deleteWorkOrder, stats
+  } = useWorkOrders();
+  const { findSpecialists, problemTypes } = useSpecialists();
+
+  const [showModal, setShowModal] = useState(false);
+  const [selectedWO, setSelectedWO] = useState(null);
+  const [step, setStep] = useState(1); // 1=machine, 2=issue, 3=specialist, 4=confirm
+  const [form, setForm] = useState({
+    machine_id: '', problem_type: '', issue_detail: '', priority: 'medium',
+    assigned_technician: '', photo: null,
+  });
+  const [matchedSpecs, setMatchedSpecs] = useState([]);
+
+  const woStatusColors = { pending: 'badge-warning', in_progress: 'badge-info', completed: 'badge-success', cancelled: 'badge-danger' };
+  const priorityColors = { critical: 'badge-danger', high: 'badge-warning', medium: 'badge-info', low: 'badge-neutral' };
+
+  const openCreate = () => {
+    setForm({ machine_id: '', problem_type: '', issue_detail: '', priority: 'medium', assigned_technician: '', photo: null });
+    setStep(1);
+    setMatchedSpecs([]);
+    setShowModal(true);
+    setSelectedWO(null);
+  };
+
+  const handleSelectProblem = (problemId) => {
+    setForm(prev => ({ ...prev, problem_type: problemId }));
+    const specs = findSpecialists(problemId);
+    setMatchedSpecs(specs);
+    setStep(3);
+  };
+
+  const handleSelectSpecialist = (techId) => {
+    setForm(prev => ({ ...prev, assigned_technician: techId }));
+    setStep(4);
+  };
+
+  const handleSubmitOrder = () => {
+    const machine = mockMachines.find(m => m.id === form.machine_id);
+    const tech = mockUsers.find(u => u.id === form.assigned_technician);
+    const problem = PROBLEM_TYPES.find(p => p.id === form.problem_type);
+
+    addWorkOrder({
+      machine_id: form.machine_id,
+      machine_name: machine?.name || '',
+      machine_type: machine?.machine_type || '',
+      assigned_technician: form.assigned_technician,
+      technician_name: tech?.name || '',
+      reported_by: 'usr_003', // Current user
+      reporter_name: 'Current User',
+      issue_reported: `${problem?.icon || '🔧'} ${problem?.label || 'Issue'} — ${form.issue_detail || machine?.name}`,
+      problem_type: form.problem_type,
+      problem_category: problem?.category || 'general',
+      priority: form.priority,
+    });
+    setShowModal(false);
+  };
+
+  const handlePhotoCapture = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => setForm(prev => ({ ...prev, photo: reader.result }));
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const openDetail = (wo) => {
+    setSelectedWO(wo);
+  };
+
+  return (
+    <div style={{ animation: 'fadeInUp 0.4s ease' }}>
+      <div className="page-header">
+        <div>
+          <h1>Work Orders</h1>
+          <p className="page-subtitle">
+            {stats.pending} pending • {stats.inProgress} in progress • {stats.completed} completed
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={openCreate}>
+          <Plus size={16} /> Create Work Order
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="stats-grid work-orders-stats" style={{ marginBottom: 'var(--space-6)' }}>
+        <div className="stat-card amber">
+          <div className="stat-icon amber"><Clock size={20} /></div>
+          <div className="stat-info">
+            <div className="stat-value">{stats.pending}</div>
+            <div className="stat-label">Pending</div>
+          </div>
+        </div>
+        <div className="stat-card blue">
+          <div className="stat-icon blue"><Play size={20} /></div>
+          <div className="stat-info">
+            <div className="stat-value">{stats.inProgress}</div>
+            <div className="stat-label">In Progress</div>
+          </div>
+        </div>
+        <div className="stat-card emerald">
+          <div className="stat-icon emerald"><CheckCircle2 size={20} /></div>
+          <div className="stat-info">
+            <div className="stat-value">{stats.completed}</div>
+            <div className="stat-label">Completed</div>
+          </div>
+        </div>
+        <div className="stat-card purple">
+          <div className="stat-icon purple"><Timer size={20} /></div>
+          <div className="stat-info">
+            <div className="stat-value">{stats.avgFixingTime}m</div>
+            <div className="stat-label">Avg Fix Time</div>
+          </div>
+        </div>
+        <div className="stat-card red">
+          <div className="stat-icon red"><DollarSign size={20} /></div>
+          <div className="stat-info">
+            <div className="stat-value">₹{stats.totalCost.toLocaleString()}</div>
+            <div className="stat-label">Total Cost</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="filter-bar">
+        <div className="search-wrapper" style={{ flex: 1, maxWidth: 320 }}>
+          <Search size={16} />
+          <input className="search-input" placeholder="Search work orders..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <select className="select-field" style={{ width: 150 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select className="select-field" style={{ width: 150 }} value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+          <option value="all">All Priority</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Machine</th>
+              <th>Issue</th>
+              <th>Technician</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Wait</th>
+              <th>Fix</th>
+              <th>Cost</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {workOrders.map(wo => (
+              <tr key={wo.id}>
+                <td style={{ fontWeight: 600, color: 'var(--primary-400)', cursor: 'pointer' }} onClick={() => openDetail(wo)}>{wo.id.toUpperCase()}</td>
+                <td>{wo.machine_name}</td>
+                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wo.issue_reported}</td>
+                <td>{wo.technician_name}</td>
+                <td><span className={`badge ${priorityColors[wo.priority]}`}>{wo.priority}</span></td>
+                <td><span className={`badge ${woStatusColors[wo.status]}`}>{wo.status.replace('_', ' ')}</span></td>
+                <td style={{ fontSize: 'var(--font-xs)' }}>{wo.waiting_time_minutes}m</td>
+                <td style={{ fontSize: 'var(--font-xs)' }}>{wo.fixing_time_minutes ? `${wo.fixing_time_minutes}m` : '—'}</td>
+                <td style={{ fontSize: 'var(--font-xs)' }}>{wo.cost ? `₹${wo.cost}` : '—'}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {wo.status === 'pending' && (
+                      <button className="btn btn-success btn-sm" onClick={() => updateStatus(wo.id, 'in_progress')} title="Start"><Play size={13} /></button>
+                    )}
+                    {wo.status === 'in_progress' && (
+                      <button className="btn btn-primary btn-sm" onClick={() => updateStatus(wo.id, 'completed')} title="Complete"><CheckCircle2 size={13} /></button>
+                    )}
+                    {(wo.status === 'pending' || wo.status === 'in_progress') && (
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-400)' }} onClick={() => updateStatus(wo.id, 'cancelled')} title="Cancel"><XCircle size={13} /></button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {workOrders.length === 0 && (
+        <div className="empty-state">
+          <ClipboardList size={48} />
+          <h3>No work orders found</h3>
+          <p>Adjust filters or create a new work order</p>
+        </div>
+      )}
+
+      {/* Create Work Order Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h2>Create Work Order</h2>
+              <button className="btn-icon" onClick={() => setShowModal(false)}><X size={20} /></button>
+            </div>
+
+            {/* Progress */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-6)' }}>
+              {['Machine', 'Problem', 'Specialist', 'Confirm'].map((s, i) => (
+                <div key={s} style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', margin: '0 auto 4px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: step > i ? 'var(--primary-600)' : step === i + 1 ? 'var(--primary-600)' : 'var(--slate-700)',
+                    color: 'white', fontSize: 'var(--font-xs)', fontWeight: 700,
+                    transition: 'all var(--transition-fast)'
+                  }}>{i + 1}</div>
+                  <div style={{ fontSize: 11, color: step === i + 1 ? 'var(--primary-400)' : 'var(--text-muted)' }}>{s}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Step 1: Select Machine */}
+            {step === 1 && (
+              <div>
+                <div className="input-group">
+                  <label>Select Machine</label>
+                  <select className="select-field" value={form.machine_id} onChange={e => { setForm(prev => ({ ...prev, machine_id: e.target.value })); if (e.target.value) setStep(2); }}>
+                    <option value="">Choose a machine...</option>
+                    {mockMachines.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} — {m.brand} ({m.location})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Select Problem Type */}
+            {step === 2 && (
+              <div>
+                <label style={{ fontSize: 'var(--font-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 12, display: 'block' }}>What's the problem?</label>
+
+                {/* Photo capture */}
+                <div style={{ display: 'flex', gap: 12, marginBottom: 'var(--space-4)' }}>
+                  <label className="btn btn-ghost" style={{ cursor: 'pointer' }}>
+                    <Camera size={16} /> Take Photo
+                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} style={{ display: 'none' }} />
+                  </label>
+                  <label className="btn btn-ghost" style={{ cursor: 'pointer' }}>
+                    📁 Upload File
+                    <input type="file" accept="image/*" onChange={handlePhotoCapture} style={{ display: 'none' }} />
+                  </label>
+                </div>
+
+                {form.photo && (
+                  <div style={{ marginBottom: 'var(--space-4)', position: 'relative' }}>
+                    <img src={form.photo} alt="Issue" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 'var(--radius-md)' }} />
+                    <button className="btn btn-ghost btn-sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={() => setForm(prev => ({ ...prev, photo: null }))}><X size={14} /></button>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {problemTypes.map(pt => (
+                    <button key={pt.id} onClick={() => handleSelectProblem(pt.id)}
+                      style={{
+                        padding: '12px 8px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)',
+                        background: form.problem_type === pt.id ? 'rgba(59,130,246,0.15)' : 'transparent',
+                        borderColor: form.problem_type === pt.id ? 'var(--primary-500)' : 'var(--border-default)',
+                        transition: 'all var(--transition-fast)', textAlign: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{ fontSize: 24, marginBottom: 4 }}>{pt.icon}</div>
+                      <div style={{ fontSize: 'var(--font-xs)', fontWeight: 600 }}>{pt.label}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="input-group" style={{ marginTop: 'var(--space-4)' }}>
+                  <label>Additional Details</label>
+                  <textarea className="input-field" rows={2} value={form.issue_detail} onChange={e => setForm(prev => ({ ...prev, issue_detail: e.target.value }))} placeholder="Describe the issue..." />
+                </div>
+
+                <div className="input-group" style={{ marginTop: 'var(--space-3)' }}>
+                  <label>Priority</label>
+                  <select className="select-field" value={form.priority} onChange={e => setForm(prev => ({ ...prev, priority: e.target.value }))}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+
+                <button className="btn btn-ghost" style={{ marginTop: 'var(--space-3)' }} onClick={() => setStep(1)}>← Back</button>
+              </div>
+            )}
+
+            {/* Step 3: Select Specialist */}
+            {step === 3 && (
+              <div>
+                <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)' }}>
+                  {matchedSpecs.length > 0 ? `Found ${matchedSpecs.length} specialist(s) for this issue:` : 'No specialists found for this category. Choose any technician:'}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(matchedSpecs.length > 0 ? matchedSpecs : mockUsers.filter(u => u.role === 'technician')).map((spec, i) => (
+                    <button key={spec.id} onClick={() => handleSelectSpecialist(spec.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: 'var(--space-4)',
+                        border: `1px solid ${form.assigned_technician === spec.id ? 'var(--primary-500)' : 'var(--border-default)'}`,
+                        borderRadius: 'var(--radius-md)', background: form.assigned_technician === spec.id ? 'rgba(59,130,246,0.1)' : 'transparent',
+                        transition: 'all var(--transition-fast)', cursor: 'pointer', textAlign: 'left', width: '100%',
+                      }}
+                    >
+                      <div className="avatar" style={{ background: spec.avatar_color }}>
+                        {spec.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {spec.name}
+                          {i === 0 && matchedSpecs.length > 0 && <span className="badge badge-success" style={{ fontSize: 10 }}>⭐ Best Match</span>}
+                        </div>
+                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
+                          {spec.expertise_level && `${spec.expertise_level.charAt(0).toUpperCase() + spec.expertise_level.slice(1)} • `}
+                          {spec.machines_handled ? `${spec.machines_handled} repairs` : spec.role}
+                        </div>
+                      </div>
+                      <div className={spec.online_status ? 'online-dot' : 'offline-dot'} />
+                    </button>
+                  ))}
+                </div>
+                <button className="btn btn-ghost" style={{ marginTop: 'var(--space-3)' }} onClick={() => setStep(2)}>← Back</button>
+              </div>
+            )}
+
+            {/* Step 4: Confirm */}
+            {step === 4 && (
+              <div>
+                <div className="card" style={{ marginBottom: 'var(--space-4)' }}>
+                  <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-3)' }}>Order Summary</h3>
+                  {[
+                    { label: 'Machine', value: mockMachines.find(m => m.id === form.machine_id)?.name },
+                    { label: 'Problem', value: PROBLEM_TYPES.find(p => p.id === form.problem_type)?.label },
+                    { label: 'Priority', value: form.priority },
+                    { label: 'Technician', value: mockUsers.find(u => u.id === form.assigned_technician)?.name },
+                    { label: 'Details', value: form.issue_detail || '—' },
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(51,65,85,0.3)', fontSize: 'var(--font-sm)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                      <span style={{ fontWeight: 600 }}>{item.value}</span>
+                    </div>
+                  ))}
+                  {form.photo && (
+                    <img src={form.photo} alt="Issue" style={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 'var(--radius-md)', marginTop: 'var(--space-3)' }} />
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                  <button className="btn btn-ghost" onClick={() => setStep(3)}>← Back</button>
+                  <button className="btn btn-success" style={{ flex: 1 }} onClick={handleSubmitOrder}>
+                    <Send size={16} /> Create Work Order
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Work Order Detail Modal */}
+      {selectedWO && (
+        <div className="modal-overlay" onClick={() => setSelectedWO(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedWO.id.toUpperCase()}</h2>
+              <button className="btn-icon" onClick={() => setSelectedWO(null)}><X size={20} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              {[
+                { label: 'Machine', value: selectedWO.machine_name },
+                { label: 'Issue', value: selectedWO.issue_reported },
+                { label: 'Technician', value: selectedWO.technician_name },
+                { label: 'Status', value: selectedWO.status },
+                { label: 'Priority', value: selectedWO.priority },
+                { label: 'Waiting Time', value: `${selectedWO.waiting_time_minutes} minutes` },
+                { label: 'Fixing Time', value: selectedWO.fixing_time_minutes ? `${selectedWO.fixing_time_minutes} minutes` : 'N/A' },
+                { label: 'Cost', value: selectedWO.cost ? `₹${selectedWO.cost}` : 'N/A' },
+                { label: 'Created', value: new Date(selectedWO.created_at).toLocaleString() },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid rgba(51,65,85,0.3)', fontSize: 'var(--font-sm)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                  <span style={{ fontWeight: 500 }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

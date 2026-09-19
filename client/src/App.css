@@ -1,0 +1,16 @@
+/* App-level styles — minimal overrides beyond the design system */
+
+/* Smooth page transitions */
+.main-content > div {
+  animation: fadeInUp 0.35s ease;
+}
+
+/* Recharts tooltip override */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* Toast notification overrides */
+div[role="status"] {
+  font-size: var(--font-sm) !important;
+}
