@@ -219,7 +219,7 @@ CREATE POLICY "Work orders viewable by all" ON work_orders FOR SELECT USING (tru
 CREATE POLICY "Work orders modifiable by all" ON work_orders FOR ALL USING (true);
 
 -- Messages: users can see their own messages
-CREATE POLICY "Users see own messages" ON messages FOR SELECT
+CREATE POLICY "Users see own messages" ON messages FOR SELECT 
   USING (sender_id = auth.uid() OR receiver_id = auth.uid());
 CREATE POLICY "Users can send messages" ON messages FOR INSERT WITH CHECK (sender_id = auth.uid());
 
@@ -228,36 +228,43 @@ CREATE POLICY "Spare parts viewable by all" ON spare_parts FOR SELECT USING (tru
 CREATE POLICY "Spare parts modifiable by all" ON spare_parts FOR ALL USING (true);
 
 -- =============================================================
--- SUPABASE STORAGE BUCKET
--- =============================================================
--- Run in Supabase Dashboard > Storage:
--- 1. Create bucket: 'machine-images' (public)
--- 2. Set file size limit: 10MB
--- 3. Allowed MIME types: image/jpeg, image/png, image/webp, image/gif
-
--- =============================================================
 -- SEED DATA
 -- =============================================================
--- (Run after tables are created)
 
+-- Users
 -- Admin user (password: admin123)
 INSERT INTO users (email, password_hash, name, phone, role, online_status) VALUES
-('admin@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Rajesh Kumar', '+91-9876543210', 'admin', true);
+('admin@textilecare.com', '$2a$12$Ll06vcLo9Y5680YK2CD10ejwadF7uDxfyUPPNCMn996IGYWuLUgmG', 'Rajesh Kumar', '+91-9876543210', 'admin', true);
 
--- Manager (password: manager123)
+-- Manager (password: admin123)
 INSERT INTO users (email, password_hash, name, phone, role, online_status) VALUES
-('manager@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Priya Sharma', '+91-9876543211', 'manager', true);
+('manager@textilecare.com', '$2a$12$Ll06vcLo9Y5680YK2CD10ejwadF7uDxfyUPPNCMn996IGYWuLUgmG', 'Priya Sharma', '+91-9876543211', 'manager', true);
 
 -- Supervisors (password: super123)
 INSERT INTO users (email, password_hash, name, phone, role, online_status) VALUES
-('supervisor1@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Anil Mehta', '+91-9876543212', 'supervisor', true),
-('supervisor2@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Sunita Devi', '+91-9876543213', 'supervisor', true),
-('supervisor3@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Vikram Singh', '+91-9876543214', 'supervisor', false);
+('supervisor1@textilecare.com', '$2a$12$IZ2vvdBiRcL2t9FbP2Mfbud2bHrl.mWBIRkYvAqXlguCJ/mHxxq.q', 'Anil Mehta', '+91-9876543212', 'supervisor', true),
+('supervisor2@textilecare.com', '$2a$12$IZ2vvdBiRcL2t9FbP2Mfbud2bHrl.mWBIRkYvAqXlguCJ/mHxxq.q', 'Sunita Devi', '+91-9876543213', 'supervisor', true),
+('supervisor3@textilecare.com', '$2a$12$IZ2vvdBiRcL2t9FbP2Mfbud2bHrl.mWBIRkYvAqXlguCJ/mHxxq.q', 'Vikram Singh', '+91-9876543214', 'supervisor', false);
 
 -- Technicians (password: tech123)
 INSERT INTO users (email, password_hash, name, phone, role, online_status) VALUES
-('tech1@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Ramesh Patel', '+91-9876543215', 'technician', true),
-('tech2@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Suresh Yadav', '+91-9876543216', 'technician', true),
-('tech3@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Manoj Gupta', '+91-9876543217', 'technician', false),
-('tech4@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Deepak Joshi', '+91-9876543218', 'technician', true),
-('tech5@textilecare.com', '$2a$12$LQv3c1yqBo9SkvXS7QTJPOh0lALHdKN5a5Y0lL.kZhHj9kvI/CXOy', 'Kamal Nair', '+91-9876543219', 'technician', true);
+('tech1@textilecare.com', '$2a$12$HSFiGJz1oeYemiznUEvs8epIqI6JdX8/s/SJZaRmVX2J4nmxScjtS', 'Ramesh Patel', '+91-9876543215', 'technician', true),
+('tech2@textilecare.com', '$2a$12$HSFiGJz1oeYemiznUEvs8epIqI6JdX8/s/SJZaRmVX2J4nmxScjtS', 'Suresh Yadav', '+91-9876543216', 'technician', true),
+('tech3@textilecare.com', '$2a$12$HSFiGJz1oeYemiznUEvs8epIqI6JdX8/s/SJZaRmVX2J4nmxScjtS', 'Manoj Gupta', '+91-9876543217', 'technician', false),
+('tech4@textilecare.com', '$2a$12$HSFiGJz1oeYemiznUEvs8epIqI6JdX8/s/SJZaRmVX2J4nmxScjtS', 'Deepak Joshi', '+91-9876543218', 'technician', true),
+('tech5@textilecare.com', '$2a$12$HSFiGJz1oeYemiznUEvs8epIqI6JdX8/s/SJZaRmVX2J4nmxScjtS', 'Kamal Nair', '+91-9876543219', 'technician', true);
+
+-- Machines
+INSERT INTO machines (name, machine_type, location, purchase_date, status, brand) VALUES 
+('Juki DDL-8700', 'Single-needle', 'Floor 1 - Line A', '2022-01-15', 'active', 'Juki'),
+('Brother S-7100A', 'Single-needle', 'Floor 1 - Line A', '2022-03-10', 'active', 'Brother'),
+('Pegasus M900', 'Overlock', 'Floor 1 - Line B', '2021-11-20', 'maintenance', 'Pegasus'),
+('Juki MO-6800', 'Overlock', 'Floor 1 - Line B', '2023-01-05', 'active', 'Juki'),
+('Brother T-8422C', 'Double-needle', 'Floor 1 - Line C', '2020-08-15', 'inactive', 'Brother');
+
+-- Spare Parts
+INSERT INTO spare_parts (part_name, quantity, reorder_level, unit_cost, supplier) VALUES 
+('Needle DBx1 #14', 250, 100, 15.00, 'Groz-Beckert'),
+('Needle DCx27 #14', 180, 100, 18.00, 'Groz-Beckert'),
+('Bobbin Case Juki Standard', 15, 20, 450.00, 'Juki Genuine'),
+('Servo Motor 550W', 3, 5, 3500.00, 'HMC');
